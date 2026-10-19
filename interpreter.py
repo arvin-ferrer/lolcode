@@ -1,30 +1,26 @@
 import pprint
-import lexer
-import tokenizer
-import parser as pr
-import symbol_table as st
-import semantic_analyzer as sa
+from lexical_analyzer import LexicalAnalyzer
+from semantic_analyzer import SemanticAnalyzer 
+from syntax_analyzer import Parser
 
 def read_file(file_path):
     with open(file_path, "r") as file:
         return file.read()
 
 def main():
-    symbol_table = st.SymbolTable()
     # For printing
     pp = pprint.PrettyPrinter(indent=4)
 
     raw_content = read_file("example.lol")
-    content = lexer.run(raw_content)
-    tokens = tokenizer.run(content)
-    # print(content)
-    parser = pr.Parser(tokens)
-    semantic_analyzer = sa.SemanticAnalyzer(symbol_table)
+    lexer = LexicalAnalyzer()
+    tokens = lexer.run(raw_content)
 
+    parser = Parser(tokens)
     parse_tree = parser.parse()
     # parse_tree.display()
 
-    semantic_analyzer.analyze(parse_tree)
+    semantic_analyzer = SemanticAnalyzer()
+    symbol_table = semantic_analyzer.analyze(parse_tree)
 
     # pp.pprint(symbol_table.table)
 

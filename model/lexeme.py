@@ -41,7 +41,7 @@ class Lexeme(Enum):
     NO_WAI = "NO WAI"
     OIC = "OIC"
     WTF = "WTF?"
-    OMG = "OMGWTF"
+    OMG = "OMG"
     OMGWTF = "OMGWTF"
     IM_IN_YR = "IM IN YR"
     UPPIN = "UPPIN"

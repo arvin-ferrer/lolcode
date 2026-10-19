@@ -1,5 +1,6 @@
 HAI
   I HAS A temp ITZ 2
+  I HAS A names ITZ "NAME"
   IM IN YR print10 UPPIN YR temp TIL BOTH SAEM temp AN 10
       IM IN YR print20 UPPIN YR temp TIL BOTH SAEM temp AN 10
         VISIBLE temp
@@ -25,7 +26,8 @@ HAI
   SUM OF QUOSHUNT OF PRODUKT OF 3 AN 4 AN 2 AN 1   BTW ((3*4)/2)+1
   SUM OF SUM OF SUM OF 3 AN 4 AN 2 AN 1            BTW ((3+4)+2)+1
 
-  BOTH SAEM names AN "NAME"
+  BOTH SAEM names AN ...
+ "NAME"
   O RLY?
     YA RLY
       VISIBLE "YOUR NAME IS ABCD"
