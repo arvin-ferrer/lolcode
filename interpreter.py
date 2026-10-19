@@ -17,12 +17,12 @@ def main():
 
     parser = Parser(tokens)
     parse_tree = parser.parse()
-    # parse_tree.display()
+    parse_tree.display()
 
     semantic_analyzer = SemanticAnalyzer()
-    symbol_table = semantic_analyzer.analyze(parse_tree)
+    symbol_table = semantic_analyzer.run(parse_tree)
 
-    # pp.pprint(symbol_table.table)
+    pp.pprint(symbol_table.table)
 
 if __name__ == "__main__":
     main()

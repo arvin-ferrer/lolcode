@@ -7,6 +7,10 @@ class SemanticAnalyzer:
     def __init__(self):
         self.symbol_table = SymbolTable()  # Initialize a new symbol table for semantic analysis
 
+    def run(self, parse_tree: Node) -> SymbolTable:
+        self.analyze(parse_tree)
+        return self.symbol_table
+    
     def analyze(self, node: Node) -> None:
         # Dispatch based on node type
         method_name = f"visit_{node.value}" # or node.type
