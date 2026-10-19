@@ -90,6 +90,8 @@ def run(raw_content):
                 lexeme_list.append(Token(raw_str, Lexeme.OIC))
             elif re.search("^WTF\\?$", raw_str):
                 lexeme_list.append(Token(raw_str, Lexeme.WTF))
+            elif re.search("^OMG$", raw_str):
+                lexeme_list.append(Token(raw_str, Lexeme.OMG))
             elif re.search("^OMGWTF$", raw_str):
                 lexeme_list.append(Token(raw_str, Lexeme.OMGWTF))
             elif re.search("^IM IN YR$", raw_str):
@@ -128,7 +130,7 @@ def run(raw_content):
             elif re.search("^NOOB$", raw_str):
                 lexeme_list.append(Token(raw_str, Lexeme.NOOB_LITERAL))
             # TYPE literals
-            elif re.search("^(NUMBR|NUMBAR|YARN|TROOF)$", raw_str):
+            elif re.search("^(NOOB|NUMBR|NUMBAR|YARN|TROOF)$", raw_str):
                 lexeme_list.append(Token(raw_str, Lexeme.TYPE_LITERAL))
             # NUMBR literals
             elif re.search("^-?\\d+$", raw_str):
@@ -137,7 +139,7 @@ def run(raw_content):
             elif re.search("^-?\\d+\\.\\d+$", raw_str):
                 lexeme_list.append(Token(raw_str, Lexeme.NUMBAR_LITERAL))
             # YARN literals
-            elif re.search("^\"[^\"]*\"$", raw_str):
+            elif re.search("^[a-zA-Z]\"[^\"]*\"$", raw_str):
                 lexeme_list.append(Token(raw_str, Lexeme.YARN_LITERAL))
             # Variable identifiers
             elif re.search("^[a-zA-Z_][a-zA-Z0-9_]*$", raw_str):
@@ -145,3 +147,9 @@ def run(raw_content):
             else:
                 print(f"Unrecognized lexeme >>{raw_str}")
     return lexeme_list
+
+
+
+print(run(['"hello"']))   # Valid YARN: "hello"
+print(run(['""']))        # Valid empty YARN: ""
+print(run(['a"hello"']))  # Invalid YARN; exposes the current regex bug
