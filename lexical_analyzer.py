@@ -55,8 +55,8 @@ class LexicalAnalyzer:
                 or re.search("^NO WAI", raw_content)\
                 or re.search("^OIC", raw_content)\
                 or re.search("^WTF\\?", raw_content)\
-                or re.search("^OMG", raw_content)\
                 or re.search("^OMGWTF", raw_content)\
+                or re.search("^OMG", raw_content)\
                 or re.search("^IM IN YR", raw_content)\
                 or re.search("^UPPIN", raw_content)\
                 or re.search("^NERFIN", raw_content)\
@@ -89,7 +89,7 @@ class LexicalAnalyzer:
                 # Split into newline
                 raw_content = self.lexeme_strip(raw_content[out.end():])
                 lexeme_list.append('\n')
-            elif out := re.search("^...", raw_content):
+            elif out := re.search("^\.\.\.", raw_content):
                 # Continue the line
                 raw_content = self.lexeme_strip(raw_content[out.end():])
                 multiline_flag = True
@@ -191,10 +191,10 @@ class LexicalAnalyzer:
                     token_list.append(Token(raw_str, Lexeme.OIC))
                 elif re.search("^WTF\\?$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.WTF))
-                elif re.search("^OMG$", raw_str):
-                    token_list.append(Token(raw_str, Lexeme.OMG))
                 elif re.search("^OMGWTF$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.OMGWTF))
+                elif re.search("^OMG$", raw_str):
+                    token_list.append(Token(raw_str, Lexeme.OMG))
                 elif re.search("^IM IN YR$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.IM_IN_YR))
                 elif re.search("^UPPIN$", raw_str):
@@ -228,7 +228,7 @@ class LexicalAnalyzer:
                 elif re.search("^(WIN|FAIL)$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.TROOF_LITERAL))
                 # TYPE literals
-                elif re.search("^(NUMBR|NUMBAR|YARN|TROOF)$", raw_str):
+                elif re.search("^(NOOB|NUMBR|NUMBAR|YARN|TROOF)$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.TYPE_LITERAL))
                 # NUMBR literals
                 elif re.search("^-?\\d+$", raw_str):
