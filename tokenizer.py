@@ -126,9 +126,6 @@ def run(raw_content):
             # TROOF literals
             elif re.search("^(WIN|FAIL)$", raw_str):
                 lexeme_list.append(Token(raw_str, Lexeme.TROOF_LITERAL))
-            # NOOB literals
-            elif re.search("^NOOB$", raw_str):
-                lexeme_list.append(Token(raw_str, Lexeme.NOOB_LITERAL))
             # TYPE literals
             elif re.search("^(NOOB|NUMBR|NUMBAR|YARN|TROOF)$", raw_str):
                 lexeme_list.append(Token(raw_str, Lexeme.TYPE_LITERAL))
@@ -139,7 +136,7 @@ def run(raw_content):
             elif re.search("^-?\\d+\\.\\d+$", raw_str):
                 lexeme_list.append(Token(raw_str, Lexeme.NUMBAR_LITERAL))
             # YARN literals
-            elif re.search("^[a-zA-Z]\"[^\"]*\"$", raw_str):
+            elif re.search("^\"[^\"]*\"$", raw_str):
                 lexeme_list.append(Token(raw_str, Lexeme.YARN_LITERAL))
             # Variable identifiers
             elif re.search("^[a-zA-Z_][a-zA-Z0-9_]*$", raw_str):
@@ -150,6 +147,6 @@ def run(raw_content):
 
 
 
-print(run(['"hello"']))   # Valid YARN: "hello"
-print(run(['""']))        # Valid empty YARN: ""
-print(run(['a"hello"']))  # Invalid YARN; exposes the current regex bug
+# print(run(['"hello"']))   # Valid YARN: "hello"
+# print(run(['""']))        # Valid empty YARN: ""
+# print(run(['a"hello"']))  # Invalid YARN; exposes the current regex bug

@@ -51,6 +51,7 @@ def run(raw_content):
             or re.search("^NO WAI", raw_content)\
             or re.search("^OIC", raw_content)\
             or re.search("^WTF\\?", raw_content)\
+            or re.search("^OMG", raw_content)\
             or re.search("^OMGWTF", raw_content)\
             or re.search("^IM IN YR", raw_content)\
             or re.search("^UPPIN", raw_content)\
@@ -84,7 +85,7 @@ def run(raw_content):
             # Split into newline
             raw_content = lexeme_strip(raw_content[out.end():])
             lexeme_list.append('\n')
-        elif out := re.search("^...", raw_content):
+        elif out := re.search("^\.\.\.", raw_content):
             # Continue the line
             raw_content = lexeme_strip(raw_content[out.end():])
             multiline_flag = True
