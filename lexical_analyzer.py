@@ -9,10 +9,17 @@ class LexicalAnalyzer:
         pass
 
     def run(self, raw_content: str) -> list[Token]:
+        """
+        Run the lexical analyzer pipeline.
+        Parse the raw content into lexemes, then get the lexeme types to build the list of tokens.
+        """
         lexeme_list = self.lexer(raw_content)       # Tokenize the input string
-        return self.parser(lexeme_list)      # Parse the lexemes into tokens
+        return self.parser(lexeme_list)             # Parse the lexemes into tokens
 
     def lexer(self, raw_content: str) -> list[str]:
+        """
+        Parse the raw contents into lexeme list
+        """
         # Tokenize the input string
         lexeme_list = []
         multiline_flag = False
@@ -104,6 +111,9 @@ class LexicalAnalyzer:
         return lexeme_list
 
     def parser(self, lexeme_list: list[str]) -> list[Token]:
+        """
+        Parse the lexeme list into tokens (lexeme, type) tuple
+        """
         # Tokenize the input string
         comment_flag = False
         token_list = []
@@ -247,6 +257,7 @@ class LexicalAnalyzer:
         return token_list
             
     def lexeme_strip(self, raw_content) -> str:
-        # Remove whitespace in the left except for newlines
-        stripped_content = re.sub(r'^[ \t]+', '', raw_content)
-        return stripped_content
+        """
+        Remove whitespace in the left except for newlines
+        """
+        return re.sub(r'^[ \t]+', '', raw_content)

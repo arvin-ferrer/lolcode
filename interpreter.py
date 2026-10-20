@@ -8,21 +8,22 @@ def read_file(file_path):
         return file.read()
 
 def main():
-    # For printing
-    pp = pprint.PrettyPrinter(indent=4)
+    pp = pprint.PrettyPrinter(indent=4)             # object for printing the symbol table neatly
 
-    raw_content = read_file("example.lol")
-    lexer = LexicalAnalyzer()
+    raw_content = read_file("example.lol")          # Read the raw text
+
+    lexer = LexicalAnalyzer()                       # Create the lexer object then run
     tokens = lexer.run(raw_content)
-
-    parser = Parser(tokens)
+    pp.pprint(tokens)
+    return
+    parser = Parser(tokens)                         # Create the parser object then run
     parse_tree = parser.parse()
-    parse_tree.display()
+    parse_tree.display()                            # Display the parse tree
 
-    semantic_analyzer = SemanticAnalyzer()
+    semantic_analyzer = SemanticAnalyzer()          # Create the semantic analyzer then run
     symbol_table = semantic_analyzer.run(parse_tree)
 
-    pp.pprint(symbol_table.table)
+    pp.pprint(symbol_table.table)                   # Print the symbol table
 
 if __name__ == "__main__":
     main()

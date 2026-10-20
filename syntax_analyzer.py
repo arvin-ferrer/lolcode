@@ -4,8 +4,8 @@ from model.node import Node
 
 class Parser():
     def __init__(self, tokens: list[Token]):
-        self.tokens = tokens
-        self.pos = 0
+        self.tokens = tokens    # List of tokens
+        self.pos = 0            # Current position of the token that is parsed
 
     def current_token(self) -> Token | None:
         """

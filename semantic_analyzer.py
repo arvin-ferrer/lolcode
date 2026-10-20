@@ -8,16 +8,26 @@ class SemanticAnalyzer:
         self.symbol_table = SymbolTable()  # Initialize a new symbol table for semantic analysis
 
     def run(self, parse_tree: Node) -> SymbolTable:
+        """
+        Analyze the semantics of the parse tree then return the built symbol table
+        """
         self.analyze(parse_tree)
         return self.symbol_table
     
     def analyze(self, node: Node) -> None:
+        """
+        Return the lambda function that visits the node according to node.type
+        Defaults to generic_visit
+        """
         # Dispatch based on node type
         method_name = f"visit_{node.value}" # or node.type
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
 
     def generic_visit(self, node: Node) -> None:
+        """
+        Visits the child through analyze function
+        """
         for i, child in enumerate(node.children):
             self.analyze(child)
 
@@ -358,37 +368,52 @@ class SemanticAnalyzer:
             >> Child 3: <expression>
         """
         if node.value != 'arithmetic_expr':
+            # Expand the children if any
+            # Assume that if there is children, it is not a terminal node
             for child in node.children:
                 self.visit_arithmetic_expr(child)
+
+            # If it is a terminal node (Token)
+            # This is the base case, analyze the terminal            
             if isinstance(node.value, Token):
+                node_type = node.value.type                 # Set the node_type to the node.value.type
+                node_val  = node.value.lexeme               # Set the node_val to the node.value.lexeme
+                if node.value.type == Lexeme.VARIABLE_IDENTIFIER:
+                    # Check the type of the variable if it is a YARN_LITERAL, NUMBAR_LITERAL, or a NUMBR_LITERAL
+                    var_info = self.symbol_table.get(node.value.lexeme)
+                    if not var_info:
+                        print(f"Error: Variable {node.value.lexeme} is not initialized.")
+                        return
+                    node_type = var_info['value_type']      # Make the node_type to the value_type of the variable
+                    node_val  = var_info['value']           # Make the node_value to the value of the variable
+
                 # Typecheck the literal values of the arithmetic expression
                 # Implicit type conversion for YARN (string) to NUMBR or NUMBAR is allowed
-                # If either operand is of type YARN, we can attempt to convert it to NUMBR or NUMBAR
-                if node.value.type == Lexeme.YARN_LITERAL:
-                    conv = self.convert_yarn_to_num(node)
+                # Only try to convert if it is valid to convert to NUMBR or NUMBAR
+                if node_type == Lexeme.YARN_LITERAL:
+                    conv = self.convert_yarn_to_num(node_val)
                     if conv is None:
-                        print(f"Error: Cannot convert operand '{node.value.lexeme}' of type YARN to NUMBR or NUMBAR.")
+                        print(f"Error: Cannot convert operand '{node_val}' of type YARN to NUMBR or NUMBAR.")
                         return
-                    lex, type = conv
-                    node.value.lexeme = lex
-                    node.value.type = type
-                elif node.value.type not in [Lexeme.NUMBR_LITERAL, Lexeme.NUMBAR_LITERAL]:
-                    print(f"Error: Arithmetic operations require operands to be of type NUMBR or NUMBAR. Found type '{node.value.type}'.")
+                elif node_type not in [Lexeme.NUMBR_LITERAL, Lexeme.NUMBAR_LITERAL]:
+                    print(f"Error: Arithmetic operations require operands to be of type NUMBR or NUMBAR. Found type '{node_val}'.")
                     return
             return
-        # Analyze the left and right expressions
+        
+        # Get the left and right expression        
         left_expression_node = node.children[1]
         right_expression_node = node.children[3]
 
+        # Expand until the terminal node is reach
         self.visit_arithmetic_expr(left_expression_node)
         self.visit_arithmetic_expr(right_expression_node)
         return
     
-    def convert_yarn_to_num(self, node: Node) -> tuple:
-        if out := re.search(r'^"-?\d+"$', node.value.lexeme):
-            return node.value.lexeme, Lexeme.NUMBR_LITERAL
-        elif out := re.search(r'^"-?\d+\.\d+"$', node.value.lexeme):
-            return node.value.lexeme, Lexeme.NUMBAR_LITERAL
+    def convert_yarn_to_num(self, lexeme: str) -> tuple:
+        if re.search(r'^"-?\d+"$', lexeme):
+            return Lexeme.NUMBR_LITERAL
+        elif re.search(r'^"-?\d+\.\d+"$', lexeme):
+            return Lexeme.NUMBAR_LITERAL
         else:
             return None
     # Comparison operations
