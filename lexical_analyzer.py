@@ -24,6 +24,8 @@ class LexicalAnalyzer:
         lexeme_list = []
         multiline_flag = False
         while raw_content not in ["", None]:
+            # TODO: Add \b for all identifiers regexes
+            #       To handle the cases of variables with identifiers inside
             if out := re.search("^HAI", raw_content)\
                 or re.search("^KTHXBYE", raw_content)\
                 or re.search("^WAZZUP", raw_content)\

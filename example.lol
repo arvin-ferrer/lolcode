@@ -1,5 +1,5 @@
 HAI
-    I HAS A temp ITZ 2
+    I HAS A APPLE ITZ 2
     I HAS A names ITZ "Hello"
   IM IN YR print10 UPPIN YR temp TIL BOTH SAEM temp AN 10
       IM IN YR print20 UPPIN YR temp TIL BOTH SAEM temp AN 10

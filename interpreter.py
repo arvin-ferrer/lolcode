@@ -14,7 +14,6 @@ def main():
 
     lexer = LexicalAnalyzer()                       # Create the lexer object then run
     tokens = lexer.run(raw_content)
-    pp.pprint(tokens)
     return
     parser = Parser(tokens)                         # Create the parser object then run
     parse_tree = parser.parse()
