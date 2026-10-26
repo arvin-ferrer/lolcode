@@ -229,7 +229,7 @@ class SemanticAnalyzer:
         if isinstance(value, int):      # If integer, return its string representation
             return str(value)
         if isinstance(value, float):    # If float, format it to a string with up to 2 decimal places, avoiding scientific notation
-            s = repr(value)
+            s = repr(round(value, 10)) if math.isfinite(value) else repr(value)           
             if "e" in s or "inf" in s or "nan" in s: s = f"{value:f}"
             whole, _, frac = s.partition(".")
             return f"{whole}.{frac[:2]}" if frac else whole
