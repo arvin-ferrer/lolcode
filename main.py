@@ -7,3 +7,7 @@ from components.interpreter import LOLCODEInterpreter
 if __name__ == "__main__":
     interpreter = LOLCODEInterpreter()
     interpreter.run("example.lol")
+
+    # print("Tokens:", interpreter.tokens)
+    # print("Parse Tree:", interpreter.parse_tree.display())
+    # print("Symbol Table:", interpreter.symbol_table)
