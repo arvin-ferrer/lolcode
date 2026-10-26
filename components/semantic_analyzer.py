@@ -326,17 +326,22 @@ class SemanticAnalyzer:
         # Switch the current frame to the callee frame
         caller, self.frame = self.frame, callee
         result = None
+        try:
+            # Execute the function body and handle control flow signals (RETURN, BREAK)
+            signal = self.exec_block(self.function_bodies[name])
+
+            # Handle the result if RETURN or BREAK
+            if isinstance(signal, tuple) and signal[0] == "RETURN":
+                result = signal[1]
+            elif signal == "BREAK":
+                result = None
         
-        # Execute the function body and handle control flow signals (RETURN, BREAK)
-        signal = self.exec_block(self.function_bodies[name])
+        except RecursionError:
+            raise RuntimeError(f"Semantic error: Maximum recursion depth exceeded")
 
-        # Handle the result if RETURN or BREAK
-        if isinstance(signal, tuple) and signal[0] == "RETURN":
-            result = signal[1]
-        elif signal == "BREAK":
-            result = None
+        finally:
+            self.frame = caller                                 # Restore the frame to the caller's frame
 
-        self.frame = caller                                 # Restore the frame to the caller's frame
         info["return_type"] = self.literal_type(result)     # Update the return type of the function in the function table based on the result
         if self.symbol_table and self.symbol_table.exists(name):
             self.symbol_table.get(name)["return_type"] = info["return_type"]
