@@ -7,9 +7,9 @@ from model.node import Node
 from model.symbol_table import SymbolTable
 
 class LOLCODEInterpreter:
-    def __init__(self, output_fn=print, input_fn=input):
+    def __init__(self, output_fn=None, input_fn=None):
         self.output_fn = output_fn
-        self.input_fn = input_fn
+        self.input_fn = input_fn if input_fn else input
         self.tokens: list[Token] = []
         self.parse_tree: Node = None
         self.symbol_table: SymbolTable = None
@@ -26,5 +26,5 @@ class LOLCODEInterpreter:
         parser = Parser(self.tokens)                    # Create the parser object then run
         self.parse_tree = parser.parse()
 
-        semantic_analyzer = SemanticAnalyzer()          # Create the semantic analyzer then run
+        semantic_analyzer = SemanticAnalyzer(output_fn=self.output_fn, input_fn=self.input_fn)          # Create the semantic analyzer then run
         self.symbol_table = semantic_analyzer.run(self.parse_tree)

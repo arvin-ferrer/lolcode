@@ -13,7 +13,10 @@ class SemanticAnalyzer:
     Executes a parse tree using recursive descent tree-walking.
     """
     def __init__(self, output_fn=None, input_fn=None, strict_noob_to_yarn: bool = False):
-        self.output_fn = output_fn if output_fn else (lambda text: print(text, end=""))
+        if output_fn is None or output_fn is print:
+            self.output_fn = lambda text: print(text, end="")
+        else:
+            self.output_fn = output_fn
         self.input_fn = input_fn if input_fn else input
 
         self.symbol_table: SymbolTable = None
@@ -207,6 +210,8 @@ class SemanticAnalyzer:
             return 1 if value else 0
         if isinstance(value, (int, float)): # If number, return it directly
             return value
+        # Strip whitespaces before converting string numbers
+        value = value.strip() if isinstance(value, str) else str(value)
         # Case where it is a YARN
         # Cast into int or float if possible, otherwise raise an error
         if re.fullmatch(r"-?\d+", value):   # If integer, cast it to int
