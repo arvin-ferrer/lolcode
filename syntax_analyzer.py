@@ -3,9 +3,33 @@ from model.token import Token
 from model.node import Node
 
 class Parser():
+    """
+    Creates a parse tree from a list of tokens using recursive descent parsing.
+
+    Citation:
+    - Spivak, R. (2015). Let's build a simple interpreter, part 7. https://ruslanspivak.com/lsbasi-part7/
+    """
+    STATEMENT_STARTERS = (
+        Lexeme.VISIBLE, Lexeme.GIMMEH,
+        Lexeme.IDENTIFIER,                      # assignment, IS NOW A, bare variable
+        Lexeme.O_RLY, Lexeme.WTF, Lexeme.IM_IN_YR,
+        Lexeme.FOUND_YR, Lexeme.I_IZ,
+        Lexeme.BTW, Lexeme.OBTW, Lexeme.GTFO,
+        Lexeme.NUMBR_LITERAL, Lexeme.NUMBAR_LITERAL, Lexeme.YARN_LITERAL, Lexeme.TROOF_LITERAL,
+        Lexeme.SUM_OF, Lexeme.DIFF_OF, Lexeme.PRODUKT_OF, Lexeme.QUOSHUNT_OF,
+        Lexeme.MOD_OF, Lexeme.BIGGR_OF, Lexeme.SMALLR_OF, Lexeme.BOTH_OF,
+        Lexeme.EITHER_OF, Lexeme.WON_OF, Lexeme.NOT, Lexeme.ANY_OF, Lexeme.ALL_OF,
+        Lexeme.BOTH_SAEM, Lexeme.DIFFRINT, Lexeme.SMOOSH, Lexeme.MAEK
+    )
+
     def __init__(self, tokens: list[Token]):
-        self.tokens = tokens    # List of tokens
-        self.pos = 0            # Current position of the token that is parsed
+        self.tokens = tokens        # List of tokens
+        self.pos = 0                # Current position of the token that is parsed
+
+        self.in_function = False    # currently parsing a function body
+        self.in_variadic = False    # currently inside ALL OF / ANY OF
+        self.in_smoosh = False      # currently inside SMOOSH
+        self.mkay_depth = 0         # enclosing constructs that own a closing MKAY
 
     def current_token(self) -> Token | None:
         """
@@ -15,9 +39,17 @@ class Parser():
             return self.tokens[self.pos]
         return None
 
+    def peek_token(self, offset: int = 1) -> Token | None:
+        """
+        Returns the token 'offset' positions ahead or None if out of range.
+        """
+        if self.pos + offset < len(self.tokens):
+            return self.tokens[self.pos + offset]
+        return None
+
     def consume_tokens(
-            self, 
-            expected: Token|None = None, 
+            self,
+            expected: Token|None = None,
             convert:  Token|None = None
         ) -> Node:
         """
@@ -43,99 +75,97 @@ class Parser():
         if self.pos < len(self.tokens):
             raise SyntaxError("Unexpected characters at end of input {}".format(self.tokens[self.pos:]))
         return tree
-    
-    # <program> ::= <outer_blocks> HAI <linebreak> <variables_dec> <statement_list> KTHXBYE <outer_blocks>
+
+    # <program> ::= <outer_blocks> HAI <end_of_line> <variables_dec> <statement_list> KTHXBYE <outer_blocks>
     def program(self) -> Node:
         node = Node("program")
         node.children.append(self.outer_blocks())
         node.children.append(self.consume_tokens(expected=Lexeme.HAI))  # HAI
-        node.children.append(self.linebreak())
+        node.children.append(self.end_of_line())
         node.children.append(self.variables_dec())
         node.children.append(self.statement_list())
         node.children.append(self.consume_tokens(expected=Lexeme.KTHXBYE))  # KTHXBYE
         node.children.append(self.outer_blocks())
         return node
 
-    # <outer_blocks> ::= <func_def> <linebreak> <outer_blocks> | <comments> <outer_blocks> | <linebreak> | ε 
+    # <outer_blocks> ::= <func_def> <end_of_line> <outer_blocks> | <comments> <outer_blocks> | <linebreak> <outer_blocks> | ε
     def outer_blocks(self) -> Node:
         node = Node("outer_blocks")
         if self.current_token() and self.current_token().type == Lexeme.HOW_IZ_I:
             node.children.append(self.func_def())
-            node.children.append(self.linebreak())
+            node.children.append(self.end_of_line())
             node.children.append(self.outer_blocks())
         elif self.current_token() and self.current_token().type in [Lexeme.BTW, Lexeme.OBTW]:
             node.children.append(self.comments())
             node.children.append(self.outer_blocks())
         elif self.current_token() and self.current_token().type == Lexeme.NEWLINE:
-            node.children.append(self.linebreak()) 
+            node.children.append(self.linebreak())
+            node.children.append(self.outer_blocks())   # keep going: a function may follow the blank lines
         else:
             pass # Epsilon
         return node
-    
-    # <statement_list> ::= <statement> <linebreak> <statement_list> | <linebreak> <statement_list> | ε
+
+    # <statement_list> ::= <statement> <end_of_line> <statement_list> | <newline> <statement_list> | ε
     def statement_list(self) -> Node:
         node = Node("statement_list")
-        
-        statement_starters = [
-            Lexeme.VISIBLE, Lexeme.I_HAS_A, Lexeme.GIMMEH,
-            Lexeme.O_RLY, Lexeme.WTF, Lexeme.IM_IN_YR, Lexeme.HOW_IZ_I,
-            Lexeme.FOUND_YR, Lexeme.I_IZ, Lexeme.MKAY,
-            Lexeme.BTW, Lexeme.OBTW, Lexeme.GTFO,
-            Lexeme.NUMBR_LITERAL, Lexeme.NUMBAR_LITERAL, Lexeme.YARN_LITERAL, Lexeme.TROOF_LITERAL, Lexeme.NOOB_LITERAL,
-            Lexeme.SUM_OF, Lexeme.DIFF_OF, Lexeme.PRODUKT_OF, Lexeme.QUOSHUNT_OF,
-            Lexeme.MOD_OF, Lexeme.BIGGR_OF, Lexeme.SMALLR_OF, Lexeme.BOTH_OF,
-            Lexeme.EITHER_OF, Lexeme.WON_OF, Lexeme.NOT, Lexeme.ANY_OF, Lexeme.ALL_OF,
-            Lexeme.BOTH_SAEM, Lexeme.DIFFRINT, Lexeme.SMOOSH, Lexeme.MAEK
-        ]
-        
-        if self.current_token() and self.current_token().type in statement_starters:
+        token = self.current_token()
+
+        if token and token.type == Lexeme.I_HAS_A and not self.in_function:
+            raise SyntaxError(
+                f"Variables must be declared inside the WAZZUP ... BUHBYE section ({token.lexeme})"
+            )
+        if token and token.type == Lexeme.HOW_IZ_I:
+            raise SyntaxError(
+                "Functions must be defined before HAI or after KTHXBYE, not inside the program body"
+            )
+
+        starters = self.STATEMENT_STARTERS
+        if self.in_function:
+            starters = starters + (Lexeme.I_HAS_A,)
+
+        if token and token.type in starters:
             node.children.append(self.statement())
-            node.children.append(self.linebreak())
+            node.children.append(self.end_of_line())    # one statement per line
             node.children.append(self.statement_list())
-        elif self.current_token() and self.current_token().type == Lexeme.NEWLINE:
+        elif token and token.type == Lexeme.NEWLINE:
             node.children.append(self.consume_tokens(expected=Lexeme.NEWLINE))  # newline
             node.children.append(self.statement_list())
         else:
             pass # Epsilon
         return node
 
-    # <statement> ::= <print> | <declaration> | <assignment> | <input> | <conditional> | <switch> | <loop> | <func_def> | <return_stmt> | <typecast_stmt> | <inline_comment> | <multi_comment> | <expression> | GTFO
+    # <statement> ::= <print> | <declaration> (functions only) | <assignment> | <input> | <conditional> | <switch> | <loop> | <return_stmt> | <typecast_stmt> | <inline_comment> | <multi_comment> | <expression> | GTFO
     def statement(self) -> Node:
         node = Node("statement")
-        if self.current_token() and self.current_token().type == Lexeme.VISIBLE:
+        token = self.current_token()
+        if token and token.type == Lexeme.VISIBLE:
             node.children.append(self.print())
-        elif self.current_token() and self.current_token().type == Lexeme.I_HAS_A:
+        elif token and token.type == Lexeme.I_HAS_A:
+            # statement_list only lets this through inside a function body
             node.children.append(self.declaration())
-        elif self.current_token() and self.current_token().type == Lexeme.IDENTIFIER:
-            if self.pos + 1 < len(self.tokens):
-                next_type = self.tokens[self.pos + 1].type
-                if next_type == Lexeme.R:
-                    node.children.append(self.assignment())
-                elif next_type == getattr(Lexeme, 'IS_NOW_A', None): # Assuming IS_NOW_A lexeme exists
-                    node.children.append(self.typecast_stmt())
-                else:
-                    node.children.append(self.expression())
+        elif token and token.type == Lexeme.IDENTIFIER:
+            next_token = self.peek_token()
+            if next_token and next_token.type == Lexeme.R:
+                node.children.append(self.assignment())
+            elif next_token and next_token.type == getattr(Lexeme, 'IS_NOW_A', None):
+                node.children.append(self.typecast_stmt())
             else:
                 node.children.append(self.expression())
-        elif self.current_token() and self.current_token().type == Lexeme.GIMMEH:
+        elif token and token.type == Lexeme.GIMMEH:
             node.children.append(self.input())
-        elif self.current_token() and self.current_token().type == Lexeme.O_RLY:
+        elif token and token.type == Lexeme.O_RLY:
             node.children.append(self.conditional())
-        elif self.current_token() and self.current_token().type == Lexeme.WTF:
+        elif token and token.type == Lexeme.WTF:
             node.children.append(self.switch())
-        elif self.current_token() and self.current_token().type == Lexeme.IM_IN_YR:
+        elif token and token.type == Lexeme.IM_IN_YR:
             node.children.append(self.loop())
-        elif self.current_token() and self.current_token().type == Lexeme.HOW_IZ_I:
-            node.children.append(self.func_def())
-        elif self.current_token() and self.current_token().type == Lexeme.FOUND_YR:
+        elif token and token.type == Lexeme.FOUND_YR:
             node.children.append(self.return_stmt())
-        elif self.current_token() and self.current_token().type == Lexeme.MKAY:
-            node.children.append(self.consume_tokens(expected=Lexeme.MKAY))  # MKAY
-        elif self.current_token() and self.current_token().type == Lexeme.BTW:
+        elif token and token.type == Lexeme.BTW:
             node.children.append(self.inline_comment())
-        elif self.current_token() and self.current_token().type == Lexeme.OBTW:
+        elif token and token.type == Lexeme.OBTW:
             node.children.append(self.multi_comment())
-        elif self.current_token() and self.current_token().type == Lexeme.GTFO:
+        elif token and token.type == Lexeme.GTFO:
             node.children.append(self.consume_tokens(expected=Lexeme.GTFO))  # GTFO
         else:
             # Fallback to expression for math operations acting as standalone statements
@@ -148,7 +178,7 @@ class Parser():
         node.children.append(self.consume_tokens(expected=Lexeme.VISIBLE))  # VISIBLE
         node.children.append(self.print_list())
         return node
-    
+
     # <print_list> ::= <expression> | <expression> + <print_list>
     def print_list(self) -> Node:
         node = Node("print_list")
@@ -157,8 +187,8 @@ class Parser():
             node.children.append(self.consume_tokens(expected=Lexeme.PLUS))  # +
             node.children.append(self.print_list())
         return node
-    
-    # <literal> ::= numbr_NUMBR_LITERAL | numbar_NUMBAR_LITERAL | yarn_YARN_LITERAL | troof_TROOF_LITERAL
+
+    # <literal> ::= NUMBR_LITERAL | NUMBAR_LITERAL | YARN_LITERAL | TROOF_LITERAL
     def literal(self) -> Node:
         node = Node("literal")
         if self.current_token() and self.current_token().type in [Lexeme.NUMBR_LITERAL, Lexeme.NUMBAR_LITERAL, Lexeme.YARN_LITERAL, Lexeme.TROOF_LITERAL]:
@@ -167,7 +197,7 @@ class Parser():
             raise SyntaxError("Expected a literal")
         return node
 
-    # <type> ::= YARN_LITERAL | NUMBR_LITERAL | NUMBAR_LITERAL | TROOF_LITERAL | NOOB_LITERAL
+    # <type> ::= TYPE_LITERAL   (YARN | NUMBR | NUMBAR | TROOF | NOOB, classified by the lexer)
     def type(self) -> Node:
         node = Node("type")
         if self.current_token() and self.current_token().type == Lexeme.TYPE_LITERAL:
@@ -175,38 +205,43 @@ class Parser():
         else:
             raise SyntaxError(f"Expected a type token, got {self.current_token()}")
         return node
-    
-    # <variables_dec> ::= WAZZUP <linebreak> <vars> BUHBYE <linebreak> | ε
+
+    # <variables_dec> ::= WAZZUP <end_of_line> <vars> BUHBYE <end_of_line> | ε
     def variables_dec(self) -> Node:
         node = Node("variables_dec")
         if self.current_token() and self.current_token().type == Lexeme.WAZZUP:
             node.children.append(self.consume_tokens(expected=Lexeme.WAZZUP))  # WAZZUP
-            node.children.append(self.linebreak())
+            node.children.append(self.end_of_line())
             node.children.append(self.vars())
             node.children.append(self.consume_tokens(expected=Lexeme.BUHBYE))  # BUHBYE
-            node.children.append(self.linebreak())
+            node.children.append(self.end_of_line())
         else:
             pass # Epsilon
         return node
-    
-    # <vars> ::= <declaration> <linebreak> <vars> | <linebreak> <vars> | <multi_comment> <linebreak> <vars> | ε
+
+    # <vars> ::= <declaration> <end_of_line> <vars> | <newline> <vars> | <linebreak-with-BTW> <vars> | <multi_comment> <end_of_line> <vars> | ε
     def vars(self) -> Node:
         node = Node("vars")
-        if self.current_token() and self.current_token().type == Lexeme.I_HAS_A:
+        token = self.current_token()
+        if token and token.type == Lexeme.I_HAS_A:
             node.children.append(self.declaration())
-            node.children.append(self.linebreak())
+            node.children.append(self.end_of_line())
             node.children.append(self.vars())
-        elif self.current_token() and self.current_token().type == Lexeme.NEWLINE:
+        elif token and token.type == Lexeme.NEWLINE:
             node.children.append(self.consume_tokens(expected=Lexeme.NEWLINE))  # newline
             node.children.append(self.vars())
-        elif self.current_token() and self.current_token().type == Lexeme.OBTW:
-            node.children.append(self.multi_comment())
+        elif token and token.type == Lexeme.BTW:
+            # full-line BTW comment inside WAZZUP
             node.children.append(self.linebreak())
+            node.children.append(self.vars())
+        elif token and token.type == Lexeme.OBTW:
+            node.children.append(self.multi_comment())
+            node.children.append(self.end_of_line())
             node.children.append(self.vars())
         else:
             pass # Epsilon
         return node
-    
+
     # <declaration> ::= I HAS A varident | I HAS A varident ITZ <expression>
     def declaration(self) -> Node:
         node = Node("declaration")
@@ -216,7 +251,7 @@ class Parser():
             node.children.append(self.consume_tokens(expected=Lexeme.ITZ))  # ITZ
             node.children.append(self.expression())
         return node
-    
+
     # <assignment> ::= varident R <expression>
     def assignment(self) -> Node:
         node = Node("assignment")
@@ -224,14 +259,14 @@ class Parser():
         node.children.append(self.consume_tokens(expected=Lexeme.R))  # R
         node.children.append(self.expression())
         return node
-    
+
     # <input> ::= GIMMEH varident
     def input(self) -> Node:
         node = Node("input")
         node.children.append(self.consume_tokens(expected=Lexeme.GIMMEH))  # GIMMEH
         node.children.append(self.consume_tokens(expected=Lexeme.IDENTIFIER, convert=Lexeme.VARIABLE_IDENTIFIER))  # VARIABLE_IDENTIFIER
         return node
-    
+
     # <expression> ::= <operand> | <arithmetic_expr> | <boolean_expr> | <comparison_expr> | <concatenation_expr> | <typecast_expr> | <func_call>
     def expression(self) -> Node:
         node = Node("expression")
@@ -252,7 +287,7 @@ class Parser():
         else:
             raise SyntaxError(f"Unexpected token in expression: {self.current_token()}")
         return node
-    
+
     # <operand> ::= varident | <literal>
     def operand(self) -> Node:
         node = Node("operand")
@@ -261,8 +296,8 @@ class Parser():
         else:
             node.children.append(self.literal())
         return node
-    
-    # <arithmetic_expr> ::= SUM OF <expression> AN <expression> | DIFF OF <expression> AN <expression> | PRODUKT OF <expression> AN <expression> | QUOSHUNT OF <expression> AN <expression> | MOD OF <expression> AN <expression> | BIGGR OF <expression> AN <expression> | SMALLR OF <expression> AN <expression>
+
+    # <arithmetic_expr> ::= SUM OF <expression> AN <expression> | DIFF OF ... | PRODUKT OF ... | QUOSHUNT OF ... | MOD OF ... | BIGGR OF ... | SMALLR OF ...
     def arithmetic_expr(self) -> Node:
         node = Node("arithmetic_expr")
         if self.current_token() and self.current_token().type in [
@@ -277,8 +312,8 @@ class Parser():
         else:
             raise SyntaxError("Unexpected token in arithmetic expression")
         return node
-    
-    # <boolean_expr> ::= BOTH OF <expression> AN <expression> | ...
+
+    # <boolean_expr> ::= BOTH OF <expr> AN <expr> | EITHER OF ... | WON OF ... | NOT <expr> | ALL OF <expr_list> MKAY | ANY OF <expr_list> MKAY
     def boolean_expr(self) -> Node:
         node = Node("boolean_expr")
         if self.current_token() and self.current_token().type in [
@@ -292,22 +327,36 @@ class Parser():
             node.children.append(self.consume_tokens(expected=Lexeme.NOT))  # NOT
             node.children.append(self.expression())
         elif self.current_token() and self.current_token().type in [Lexeme.ANY_OF, Lexeme.ALL_OF]:
+            # Spec: ALL OF / ANY OF cannot be nested in each other or themselves
+            if self.in_variadic:
+                raise SyntaxError(
+                    f"ALL OF / ANY OF cannot be nested inside another ALL OF / ANY OF ({self.current_token().lexeme})"
+                )
             node.children.append(self.consume_tokens(expected=self.current_token().type))  # ANY OF, ALL OF
-            node.children.append(self.expr_list())
+            self.in_variadic = True
+            self.mkay_depth += 1
+            try:
+                node.children.append(self.expr_list())
+            finally:
+                self.in_variadic = False
+                self.mkay_depth -= 1
             node.children.append(self.consume_tokens(expected=Lexeme.MKAY))  # MKAY
         else:
             raise SyntaxError("Unexpected token in boolean expression")
         return node
-    
+
     # <expr_list> ::= <expression> | <expression> AN <expr_list>
     def expr_list(self) -> Node:
         node = Node("expr_list")
         node.children.append(self.expression())
-        if self.current_token() and self.current_token().type == Lexeme.AN:
+        # An 'AN YR' belongs to an enclosing function call/definition, not to this list
+        next_token = self.peek_token()
+        if (self.current_token() and self.current_token().type == Lexeme.AN
+                and not (next_token and next_token.type == Lexeme.YR)):
             node.children.append(self.consume_tokens(expected=Lexeme.AN))  # AN
             node.children.append(self.expr_list())
         return node
-    
+
     # <comparison_expr> ::= BOTH SAEM <expression> AN <expression> | DIFFRINT <expression> AN <expression>
     def comparison_expr(self) -> Node:
         node = Node("comparison_expr")
@@ -319,16 +368,23 @@ class Parser():
         else:
             raise SyntaxError("Unexpected token in comparison expression")
         return node
-    
-    # <concatenation_expr> ::= SMOOSH <expr_list> | SMOOSH <expr_list> MKAY
+
+    # <concatenation_expr> ::= SMOOSH <expr_list> MKAY | SMOOSH <expr_list>
     def concatenation_expr(self) -> Node:
         node = Node("concatenation_expr")
+        if self.in_smoosh:
+            raise SyntaxError("SMOOSH cannot be nested inside another SMOOSH")
         node.children.append(self.consume_tokens(expected=Lexeme.SMOOSH))  # SMOOSH
-        node.children.append(self.expr_list())
-        if self.current_token() and self.current_token().type == Lexeme.MKAY:
+        self.in_smoosh = True
+        try:
+            node.children.append(self.expr_list())
+        finally:
+            self.in_smoosh = False
+        # Only take an MKAY if no enclosing construct is waiting for it
+        if self.mkay_depth == 0 and self.current_token() and self.current_token().type == Lexeme.MKAY:
             node.children.append(self.consume_tokens(expected=Lexeme.MKAY))  # MKAY
         return node
-    
+
     # <typecast_expr> ::= MAEK <expression> A type | MAEK <expression> type
     def typecast_expr(self) -> Node:
         node = Node("typecast_expr")
@@ -338,92 +394,100 @@ class Parser():
             node.children.append(self.consume_tokens(expected=Lexeme.A))  # A
         node.children.append(self.type())
         return node
-    
+
     # <typecast_stmt> ::= varident IS NOW A type
     def typecast_stmt(self) -> Node:
         node = Node("typecast_stmt")
         node.children.append(self.consume_tokens(expected=Lexeme.IDENTIFIER, convert=Lexeme.VARIABLE_IDENTIFIER))  # VARIABLE_IDENTIFIER
-        node.children.append(self.consume_tokens(expected=Lexeme.IS_NOW_A))  # IS NOW A (Assuming your lexer bundles this into 1 token)
+        node.children.append(self.consume_tokens(expected=Lexeme.IS_NOW_A))  # IS NOW A (lexer bundles this into 1 token)
         node.children.append(self.type())
         return node
-    
-    # <conditional> ::= O RLY? <linebreak> YA RLY <linebreak> <statement_list> <mebbe_blocks> <no_wai_block> OIC
+
+    # <conditional> ::= O RLY? <end_of_line> YA RLY <end_of_line> <statement_list> <mebbe_blocks> <no_wai_block> OIC
     def conditional(self) -> Node:
         node = Node("conditional")
         node.children.append(self.consume_tokens(expected=Lexeme.O_RLY))  # O RLY
-        node.children.append(self.linebreak())
+        node.children.append(self.end_of_line())
         node.children.append(self.consume_tokens(expected=Lexeme.YA_RLY))  # YA RLY
-        node.children.append(self.linebreak())
+        node.children.append(self.end_of_line())
         node.children.append(self.statement_list())
         node.children.append(self.mebbe_blocks())
         node.children.append(self.no_wai_block())
         node.children.append(self.consume_tokens(expected=Lexeme.OIC))  # OIC
         return node
 
-    # <mebbe_blocks> ::= MEBBE <expression> <linebreak> <statement_list> <mebbe_blocks> | ε
+    # <mebbe_blocks> ::= MEBBE <expression> <end_of_line> <statement_list> <mebbe_blocks> | ε
     def mebbe_blocks(self) -> Node:
         node = Node("mebbe_blocks")
         if self.current_token() and self.current_token().type == Lexeme.MEBBE:
             node.children.append(self.consume_tokens(expected=Lexeme.MEBBE))
             node.children.append(self.expression())
-            node.children.append(self.linebreak())
+            node.children.append(self.end_of_line())
             node.children.append(self.statement_list())
             node.children.append(self.mebbe_blocks())
         return node
 
-    # <no_wai_block> ::= NO WAI <linebreak> <statement_list> | ε
+    # <no_wai_block> ::= NO WAI <end_of_line> <statement_list> | ε
     def no_wai_block(self) -> Node:
         node = Node("no_wai_block")
         if self.current_token() and self.current_token().type == Lexeme.NO_WAI:
             node.children.append(self.consume_tokens(expected=Lexeme.NO_WAI))
-            node.children.append(self.linebreak())
+            node.children.append(self.end_of_line())
             node.children.append(self.statement_list())
         return node
 
-    # <switch> ::= WTF? <linebreak> <case_blocks> <default_block> OIC
+    # <switch> ::= WTF? <end_of_line> <case_blocks> <default_block> OIC     
     def switch(self) -> Node:
         node = Node("switch")
         node.children.append(self.consume_tokens(expected=Lexeme.WTF))
-        node.children.append(self.linebreak())
+        node.children.append(self.end_of_line())
+        if not (self.current_token() and self.current_token().type == Lexeme.OMG):
+            raise SyntaxError(f"Expected at least one OMG case after WTF?, got {self.current_token()}")
         node.children.append(self.case_blocks())
         node.children.append(self.default_block())
         node.children.append(self.consume_tokens(expected=Lexeme.OIC))  # OIC
         return node
 
-    # <case_blocks> ::= OMG <literal> <linebreak> <statement_list> | OMG <literal> <linebreak> <statement_list> <case_blocks>
+    # <case_blocks> ::= OMG <literal> <end_of_line> <statement_list> <case_blocks> | ε
     def case_blocks(self) -> Node:
         node = Node("case_blocks")
         if self.current_token() and self.current_token().type == Lexeme.OMG:
             node.children.append(self.consume_tokens(expected=Lexeme.OMG))
             node.children.append(self.literal())
-            node.children.append(self.linebreak())
+            node.children.append(self.end_of_line())
             node.children.append(self.statement_list())
             node.children.append(self.case_blocks())
         return node
 
-    # <default_block> ::= OMGWTF <linebreak> <statement_list> | ε
+    # <default_block> ::= OMGWTF <end_of_line> <statement_list> | ε
     def default_block(self) -> Node:
         node = Node("default_block")
         if self.current_token() and self.current_token().type == Lexeme.OMGWTF:
             node.children.append(self.consume_tokens(expected=Lexeme.OMGWTF))
-            node.children.append(self.linebreak())
+            node.children.append(self.end_of_line())
             node.children.append(self.statement_list())
         return node
 
-    # <loop> ::= IM IN YR loopident <loop_action> YR varident <loop_cond> <linebreak> <statement_list> <linebreak> IM OUTTA YR loopident
+    # <loop> ::= IM IN YR loopident <loop_action> YR varident <loop_cond> <end_of_line> <statement_list> IM OUTTA YR loopident
     def loop(self) -> Node:
         node = Node("loop")
         node.children.append(self.consume_tokens(expected=Lexeme.IM_IN_YR))  # IM IN YR
-        node.children.append(self.consume_tokens(expected=Lexeme.IDENTIFIER, convert=Lexeme.LOOP_IDENTIFIER)) 
+        open_label = self.current_token()
+        node.children.append(self.consume_tokens(expected=Lexeme.IDENTIFIER, convert=Lexeme.LOOP_IDENTIFIER))
         node.children.append(self.loop_action())
         node.children.append(self.consume_tokens(expected=Lexeme.YR))  # YR
         node.children.append(self.consume_tokens(expected=Lexeme.IDENTIFIER, convert=Lexeme.VARIABLE_IDENTIFIER))  # VARIABLE_IDENTIFIER
         node.children.append(self.loop_cond())
-        node.children.append(self.linebreak())
+        node.children.append(self.end_of_line())
         node.children.append(self.statement_list())
         node.children.append(self.linebreak())
         node.children.append(self.consume_tokens(expected=Lexeme.IM_OUTTA_YR))  # IM OUTTA YR
-        node.children.append(self.consume_tokens(expected=Lexeme.IDENTIFIER, convert=Lexeme.LOOP_IDENTIFIER))  
+        close_label = self.current_token()
+        node.children.append(self.consume_tokens(expected=Lexeme.IDENTIFIER, convert=Lexeme.LOOP_IDENTIFIER))
+        if open_label.lexeme != close_label.lexeme:
+            raise SyntaxError(
+                f"Loop label mismatch: IM IN YR {open_label.lexeme} closed by IM OUTTA YR {close_label.lexeme}"
+            )
         return node
 
     # <loop_action> ::= UPPIN | NERFIN
@@ -447,11 +511,16 @@ class Parser():
     def func_def(self) -> Node:
         node = Node("func_def")
         node.children.append(self.consume_tokens(expected=Lexeme.HOW_IZ_I))
-        node.children.append(self.consume_tokens(expected=Lexeme.IDENTIFIER, convert=Lexeme.FUNCTION_IDENTIFIER))  # VARIABLE_IDENTIFIER
+        node.children.append(self.consume_tokens(expected=Lexeme.IDENTIFIER, convert=Lexeme.FUNCTION_IDENTIFIER))
         if self.current_token() and self.current_token().type == Lexeme.YR:
             node.children.append(self.func_params())
-        node.children.append(self.linebreak())
-        node.children.append(self.statement_list())
+        node.children.append(self.end_of_line())
+        previous = self.in_function
+        self.in_function = True
+        try:
+            node.children.append(self.statement_list())
+        finally:
+            self.in_function = previous
         node.children.append(self.consume_tokens(expected=Lexeme.IF_U_SAY_SO))  # IF U SAY SO
         return node
 
@@ -476,9 +545,20 @@ class Parser():
     def func_call(self) -> Node:
         node = Node("func_call")
         node.children.append(self.consume_tokens(expected=Lexeme.I_IZ))
-        node.children.append(self.consume_tokens(expected=Lexeme.IDENTIFIER, convert=Lexeme.FUNCTION_IDENTIFIER)) 
-        if self.current_token() and self.current_token().type == Lexeme.YR:
-            node.children.append(self.call_args())
+        node.children.append(self.consume_tokens(expected=Lexeme.IDENTIFIER, convert=Lexeme.FUNCTION_IDENTIFIER))
+
+        # Arguments are their own expression context
+        # reset nesting flags, and tell SMOOSH/ALL OF that this call owns the closing MKAY.
+        saved_variadic, saved_smoosh = self.in_variadic, self.in_smoosh
+        self.in_variadic = self.in_smoosh = False
+        self.mkay_depth += 1
+        try:
+            if self.current_token() and self.current_token().type == Lexeme.YR:
+                node.children.append(self.call_args())
+        finally:
+            self.mkay_depth -= 1
+            self.in_variadic, self.in_smoosh = saved_variadic, saved_smoosh
+
         node.children.append(self.consume_tokens(expected=Lexeme.MKAY))  # MKAY
         return node
 
@@ -492,7 +572,14 @@ class Parser():
             node.children.append(self.call_args())
         return node
 
-    # <linebreak> ::= <newline> | <inline_comment> <newline> | ε
+    # <end_of_line> ::= <linebreak>
+    def end_of_line(self) -> Node:
+        token = self.current_token()
+        if token and token.type not in (Lexeme.NEWLINE, Lexeme.BTW):
+            raise SyntaxError(f"Expected end of line, got {token.type} ({token.lexeme})")
+        return self.linebreak()
+
+    # <linebreak> ::= <newline>+ | <inline_comment> <newline>+ | ε
     def linebreak(self) -> Node:
         node = Node("linebreak")
         if self.current_token() and self.current_token().type == Lexeme.BTW:
@@ -525,13 +612,18 @@ class Parser():
             node.children.append(self.comment())
         return node
 
-    # <multi_comment> ::= OBTW newline <comment_body> TLDR
+    # <multi_comment> ::= OBTW [<comment>] newline <comment_body> TLDR [<comment>]
     def multi_comment(self) -> Node:
         node = Node("multi_comment")
         node.children.append(self.consume_tokens(expected=Lexeme.OBTW))
+        # The spec's examples allow text on the OBTW line ("OBTW what way?")
+        while self.current_token() and self.current_token().type == Lexeme.COMMENT_IDENTIFIER:
+            node.children.append(self.comment())
         node.children.append(self.consume_tokens(expected=Lexeme.NEWLINE))  # newline
         node.children.append(self.comment_body())
         node.children.append(self.consume_tokens(expected=Lexeme.TLDR))  # TLDR
+        while self.current_token() and self.current_token().type == Lexeme.COMMENT_IDENTIFIER:
+            node.children.append(self.comment())
         return node
 
     # <comment_body> ::= <comment> <newline> <comment_body> | <newline> <comment_body> | ε

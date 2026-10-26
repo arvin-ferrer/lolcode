@@ -1,501 +1,689 @@
+import math
+import re
+import sys
+
 from model.lexeme import Lexeme
 from model.token import Token
 from model.node import Node
 from model.symbol_table import SymbolTable
-import re
+from model.frame import Frame
+
 class SemanticAnalyzer:
-    def __init__(self):
-        self.symbol_table = SymbolTable()  # Initialize a new symbol table for semantic analysis
+    """
+    Executes a parse tree using recursive descent tree-walking.
+    """
+    def __init__(self, output_fn=None, input_fn=None, strict_noob_to_yarn: bool = False):
+        self.output_fn = output_fn if output_fn else (lambda text: print(text, end=""))
+        self.input_fn = input_fn if input_fn else input
+
+        self.symbol_table: SymbolTable = None
+        self.function_table: SymbolTable = None
+        self.function_bodies: dict[str, Node] = {}
+        self.frame: Frame = None
+
+        # Parameter to control strict NOOB to YARN casting
+        self.STRICT_NOOB_TO_YARN = strict_noob_to_yarn
 
     def run(self, parse_tree: Node) -> SymbolTable:
         """
-        Analyze the semantics of the parse tree then return the built symbol table
+        Run the semantic analyzer on the given parse tree and return the symbol table.
         """
-        self.analyze(parse_tree)
+        # Increase recursion limit to handle deep parse trees
+        sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
+
+        # Initialize the symbol table, function table, and frame for execution
+        self.symbol_table = SymbolTable()
+        self.function_table = SymbolTable()
+        self.function_bodies = {}
+        self.frame = Frame(self.symbol_table)
+
+        children = parse_tree.children      # Get the children of the root node (program structure)
+        try:
+            # Register functions from the program's function definitions
+            self.register_functions(children[0])
+            self.register_functions(children[6])
+
+            for decl in self.collect(children[3], "declaration"):
+                # Guard with try-except to catch recursion errors and provide context
+                # Execute declaration
+                self.guard(decl, self.exec_declaration, decl)
+            self.exec_block(children[4])    # Execute the main program block
+        except RecursionError:
+            raise RuntimeError("Semantic error: Maximum recursion depth exceeded (runaway recursive function?)")
         return self.symbol_table
-    
-    def analyze(self, node: Node) -> None:
-        """
-        Return the lambda function that visits the node according to node.type
-        Defaults to generic_visit
-        """
-        # Dispatch based on node type
-        method_name = f"visit_{node.value}" # or node.type
-        visitor = getattr(self, method_name, self.generic_visit)
-        return visitor(node)
 
-    def generic_visit(self, node: Node) -> None:
+    @staticmethod
+    def collect(node: Node, name: str) -> list[Node]:
         """
-        Visits the child through analyze function
+        Collect all nodes with the given name in the subtree rooted at the given node.
         """
-        for i, child in enumerate(node.children):
-            self.analyze(child)
+        found, stack = [], [node]
+        while stack:
+            n = stack.pop()
+            if n.value == name:
+                found.append(n)
+            else:
+                stack.extend(reversed(n.children))
+        return found
 
-    def get_terminal(self, node: Node) -> Node:
+    @staticmethod
+    def flatten_statements(node: Node) -> list[Node]:
         """
-        Recursively traverse the parse tree to find the first terminal node.
+        Get statements from a subtree, then return the list of statements in order.
         """
-        if not node.children:  # If there are no children, it's a terminal node
-            return node
-        else:
+        statements = []             # List to hold the collected statements
+        while node is not None:
+            nxt = None              # Variable to hold the next statement_list node if it exists
+            for child in node.children:         
+                if child.value == "statement":
+                    statements.append(child)    # If statement node, add to statements
+                elif child.value == "statement_list":
+                    nxt = child                 # If statement_list node, set nxt to it for further traversal
+            node = nxt                          # Move to the next statement_list node for further traversal
+        return statements
+
+    @staticmethod
+    def flatten_expr_list(node: Node) -> list[Node]:
+        """
+        Get expressions from a subtree, then return the list of expressions in order.
+        """
+        out = []                        # List to hold the collected expressions
+        while node is not None:
+            nxt = None                  # Variable to hold the next expr_list node if it exists
             for child in node.children:
-                terminal = self.get_terminal(child)
-                if terminal:
-                    return terminal
+                if child.value == "expression":
+                    out.append(child)   # If expression node, add to out
+                elif child.value == "expr_list":
+                    nxt = child         # If expr_list node, set nxt to it for further traversal
+            node = nxt
+        return out
+
+    @staticmethod
+    def source_text(node: Node) -> str:
+        """
+        Get the source text corresponding to a node in the parse tree, up to 12 tokens or until a newline is encountered.
+        """
+        # Track the tokens and nodes to reconstruct the source text
+        # Out is the list of lexemes to return
+        # Stack is used for depth-first traversal of the parse tree
+        out, stack = [], [node]
+        while stack and len(out) < 12:
+            n = stack.pop()                 # Pop the last node from the stack for processing
+            if isinstance(n.value, Token):  # If the node's value is a Token, process it
+                if n.value.type == Lexeme.NEWLINE:
+                    break                   # Stop processing if a newline token is encountered
+                out.append(n.value.lexeme)
+            else:                           # Add the children of the node to the stack for further processing
+                stack.extend(reversed(n.children))
+        return " ".join(out)
+
+    def guard(self, node: Node, fn, *args):
+        """
+        Surround a function with a try-except block to catch runtime errors
+        """
+        try:
+            # Return the result of the function call with the provided arguments
+            return fn(*args)
+        except RuntimeError as e:
+            if "[near:" not in str(e):
+                raise RuntimeError(f"{str(e)}  [near: {self.source_text(node)}]")
+            raise
+
+    @staticmethod
+    def literal_type(value) -> Lexeme:
+        """
+        Determine the type of a literal value.
+        """
+        if value is None: 
+            return Lexeme.NOOB_LITERAL
+        if isinstance(value, bool): 
+            return Lexeme.TROOF_LITERAL
+        if isinstance(value, int): 
+            return Lexeme.NUMBR_LITERAL
+        if isinstance(value, float): 
+            return Lexeme.NUMBAR_LITERAL
+        return Lexeme.YARN_LITERAL
+
+    def set_var(self, name: str, value) -> None:
+        """
+        Set the value of a variable in the current frame's symbol table.
+        """
+        self.frame.table.add(name, Lexeme.VARIABLE_IDENTIFIER, value, self.literal_type(value))
+
+    def get_var(self, name: str):
+        """
+        Get the value of a variable from the current frame's symbol table.
+        Raises an error if the variable is not declared.
+        """
+        entry = self.frame.table.get(name)
+        if entry is None:
+            raise RuntimeError(f"Semantic error: Variable '{name}' is not declared")
+        return entry["value"]
+
+    def set_it(self, value) -> None:
+        """
+        Set the implicit IT variable in the current frame's symbol table.
+        """
+        self.set_var("IT", value)
+
+    @staticmethod
+    def literal_value(token: Token):
+        """
+        Get the literal value of a token based on its type.
+        """
+        s = token.lexeme
+        if token.type == Lexeme.NUMBR_LITERAL: 
+            return int(s)
+        if token.type == Lexeme.NUMBAR_LITERAL: 
+            return float(s)
+        if token.type == Lexeme.YARN_LITERAL: 
+            return s[1:-1]
+        return s == "WIN"
+
+    @staticmethod
+    def to_troof(value) -> bool:
+        """
+        Convert a value to a boolean (TROOF).
+        """
+        if value is None:           # NOOB is considered false in boolean context
+            return False
+        if isinstance(value, bool): # Return the boolean value directly
+            return value
+        if isinstance(value, (int, float)): 
+            return value != 0       # Cast 
+        return value != ""
+
+    @staticmethod
+    def to_number(value, explicit: bool = False):
+        """
+        Convert a value to a number (NUMBR or NUMBAR).
+        Raises an error if the conversion is not possible and explicit is False.
+        """
+        if value is None:   # NOOB cannot be implicitly cast to a number
+            if explicit:    # If explicit is True, return 0 for NOOB
+                return 0
+            raise RuntimeError("Semantic error: A NOOB cannot be implicitly cast to a number")
+        if isinstance(value, bool):         # If bool, return 1 for True and 0 for False
+            return 1 if value else 0
+        if isinstance(value, (int, float)): # If number, return it directly
+            return value
+        # Case where it is a YARN
+        # Cast into int or float if possible, otherwise raise an error
+        if re.fullmatch(r"-?\d+", value):   # If integer, cast it to int
+            return int(value)
+        if re.fullmatch(r"-?(\d+\.\d*|\.\d+)", value): 
+            return float(value)             # If float, cast it to float
+        raise RuntimeError(f"Semantic error: Cannot cast YARN \"{value}\" to a number")
+
+    def to_yarn(self, value, explicit: bool = False) -> str:
+        """
+        Convert a value to a YARN (string).
+        Raises an error if the conversion is not possible and explicit is False.
+        """
+        if value is None:   # NOOB cannot be implicitly cast to a YARN
+            if explicit or not self.STRICT_NOOB_TO_YARN: 
+                return ""   # If explicit is True or strict casting is disabled, return an empty string for NOOB
+            raise RuntimeError("Semantic error: A NOOB cannot be implicitly cast to a YARN")
+        if isinstance(value, bool):     # If boolean, return "WIN" for True and "FAIL" for False
+            return "WIN" if value else "FAIL"
+        if isinstance(value, int):      # If integer, return its string representation
+            return str(value)
+        if isinstance(value, float):    # If float, format it to a string with up to 2 decimal places, avoiding scientific notation
+            s = repr(value)
+            if "e" in s or "inf" in s or "nan" in s: s = f"{value:f}"
+            whole, _, frac = s.partition(".")
+            return f"{whole}.{frac[:2]}" if frac else whole
+        return value
+
+    def cast(self, value, target: str):
+        """
+        Cast a value to a target type.
+        """
+        if target == "NOOB": 
+            return None
+        if target == "TROOF": 
+            return self.to_troof(value)
+        if target == "NUMBR": 
+            return int(self.to_number(value, explicit=True))
+        if target == "NUMBAR": 
+            return float(self.to_number(value, explicit=True))
+        if target == "YARN": 
+            return self.to_yarn(value, explicit=True)
+        raise RuntimeError(f"Semantic error: Unknown type '{target}'")
+
+    @staticmethod
+    def get_kind(value) -> str:
+        """
+        Get the kind of a value as a string representation of its type.
+        """
+        if value is None: 
+            return "NOOB"
+        if isinstance(value, bool): 
+            return "TROOF"
+        if isinstance(value, (int, float)): 
+            return "NUM"
+        return "YARN"
+
+    @classmethod
+    def values_equal(cls, a, b) -> bool:
+        """
+        Check if two values are equal, considering their types.
+        """
+        return cls.get_kind(a) == cls.get_kind(b) and a == b
+
+    def register_functions(self, outer_blocks: Node) -> None:
+        """
+        Register all function definitions found in the given outer blocks into the function table.
+        """
+        # Iterate through all function definition nodes in the outer blocks
+        for func_def_node in self.collect(outer_blocks, "func_def"):
+            name = func_def_node.children[1].value.lexeme   # Get name
+            if self.function_table.exists(name):            # If already defined in the symbol table, raise an error
+                raise RuntimeError(f"Semantic error: Function '{name}' is already defined")
+            params, body = [], None                         # Params and body of the function
+            for child in func_def_node.children:            # Iterate the childrens
+                if child.value == "func_params":            # If func_params, collect the parameter names
+                    node = child
+                    while node is not None:                 # Iterate through the func_params node to collect parameter names
+                        param_name = node.children[1].value.lexeme
+                        if param_name in params:            # If already in params, raise an error for duplicate parameter
+                            raise RuntimeError(f"Semantic error: Duplicate parameter '{param_name}' in function '{name}'")
+                        params.append(param_name)           # Add the parameter name to the params list
+                        node = node.children[3] if len(node.children) > 3 else None
+                elif child.value == "statement_list":       # If statement_list, this is the body of the function
+                    body = child
+            # Add the function to the function table with its parameters and body
+            self.function_table.add(name, Lexeme.FUNCTION_IDENTIFIER, None, None,
+                                    parameters=params, return_type=None)
+            self.function_bodies[name] = body
+
+    def call_function(self, name: str, args: list):
+        """
+        Call the function with the given name and arguments, executing its body in a new frame.
+        """
+        # Retrieve the function information from the function table 
+        info = self.function_table.get(name)
+        # Handle missing function definition or incorrect number of arguments
+        if info is None:
+            raise RuntimeError(f"Semantic error: Function '{name}' is not defined")
+        params = info["parameters"]
+        if len(args) != len(params):
+            raise RuntimeError(f"Semantic error: Function '{name}' expects {len(params)} argument(s), got {len(args)}")
+
+        # Create a new frame for the function call, passing the arguments to the parameters
+        callee = Frame(in_function=True)
+        # Add params to the frame
+        for param_name, value in zip(params, args):
+            callee.table.add(param_name, Lexeme.VARIABLE_IDENTIFIER, value, self.literal_type(value))
+
+        # Switch the current frame to the callee frame
+        caller, self.frame = self.frame, callee
+        result = None
+        
+        # Execute the function body and handle control flow signals (RETURN, BREAK)
+        signal = self.exec_block(self.function_bodies[name])
+
+        # Handle the result if RETURN or BREAK
+        if isinstance(signal, tuple) and signal[0] == "RETURN":
+            result = signal[1]
+        elif signal == "BREAK":
+            result = None
+
+        self.frame = caller                                 # Restore the frame to the caller's frame
+        info["return_type"] = self.literal_type(result)     # Update the return type of the function in the function table based on the result
+        self.set_it(result)                                 # Set the implicit IT variable to the result of the function call
+        return result
+
+    def exec_block(self, statement_list: Node):
+        """
+        Execute a list of statements and return the first control flow signal encountered.
+        """
+        for stmt in self.flatten_statements(statement_list):
+            # Returns the signal from the executed statement
+            signal = self.exec_statement(stmt)
+            if signal is not None:
+                return signal
+        # Return None if there is no statement or no signal
         return None
 
-    def get_terminal_with_parent(self, node: Node, parent: Node|None=None) -> tuple:
+    def exec_statement(self, node: Node):
         """
-        Recursively traverse the parse tree to find the first terminal node and its parent.
+        Execute a single statement
         """
-        if not node.children:  # If there are no children, it's a terminal node
-            return (node, None)
-        else:
-            for child in node.children:
-                terminal, parent = self.get_terminal_with_parent(child, node)
-                if terminal:
-                    return (terminal, node)
-        return (None, None)
+        child = node.children[0]
+        # Guard the execution of the statement with error handling and return the result
+        return self.guard(node, self.dispatch_statement, child)
 
-    def get_terminals(self, node: Node) -> list[Node]:
+    def dispatch_statement(self, child: Node):
         """
-        Recursively traverse the parse tree to find all terminal nodes.
+        Call the appropriate execution method based on the type of statement.
         """
-        terminals = []
-        if not node.children:  # If there are no children, it's a terminal node
-            terminals.append(node)
-        else:
-            for child in node.children:
-                terminals.extend(self.get_terminals(child))
-        return terminals
-    
-    # Specific visit methods for different node types
-    def visit_declaration(self, node: Node):
-        """
-        Visit an I_HAS_A node in the parse tree.
-            > Child 0: Token for I HAS A
-            > Child 1: Token for variable name
-            > Child 2: Token for ITZ    (optional)
-            > Child 3: Node for value   (optional)
-        """
-        variable_node = node.children[1].value
+        if isinstance(child.value, Token):
+            if self.frame.break_depth == 0:     # If GTFO is used outside of a loop, switch-case, or function, raise an error
+                raise RuntimeError("Semantic error: GTFO used outside of a loop, switch-case or function")
+            return "BREAK"                      # Return "BREAK" signal to indicate a break in the current loop or switch-case
+        # If the child is not a Token, call the corresponding execution method based on the statement type
+        return getattr(self, f"exec_{child.value}")(child)
 
-        # Check if the variable already exists in the symbol table
-        if self.symbol_table.exists(variable_node.lexeme):
-            print(f"Error: Variable '{variable_node.lexeme}' already declared.")
-            return
+    # Execution methods for different statement types
+
+    # No operation for comments and multi-line comments
+    def exec_inline_comment(self, node): pass
+    def exec_multi_comment(self, node): pass
+
+    def exec_expression(self, node: Node):
+        """
+        Evaluate an expression and set the implicit IT variable to its value.
+        """
+        self.set_it(self.eval_expression(node))
+
+    def exec_declaration(self, node: Node):
+        """
+        Execute a variable declaration statement
+        """
+        name = node.children[1].value.lexeme    # Get the variable name
+        if self.frame.table.exists(name):       # If it exists in symbol table, raise an error
+            raise RuntimeError(f"Semantic error: Variable '{name}' is already declared")
+        # Evaluate expression and get the value
+        value = self.eval_expression(node.children[3]) if len(node.children) > 2 else None
+        # Set the value to the variable in the current frame's symbol table
+        self.set_var(name, value)
+
+    def exec_assignment(self, node: Node):
+        """
+        Execute a variable assignment statement
+        """
+        name = node.children[0].value.lexeme    # Get the variable name
+        if not self.frame.table.exists(name):   # If it does not exist in the symbol table, raise an error
+            raise RuntimeError(f"Semantic error: Variable '{name}' is not declared before assignment")
+        # Update the variable's value in the current frame's symbol table with the evaluated expression
+        self.set_var(name, self.eval_expression(node.children[2]))
+
+    def exec_input(self, node: Node):
+        """
+        Execute an input statement, reading a value from the user and assigning it to a variable.
+        """
+        name = node.children[1].value.lexeme    # Get the variable name
+        if not self.frame.table.exists(name):   # If it does not exist in the symbol table, raise an error
+            raise RuntimeError(f"Semantic error: Variable '{name}' is not declared before GIMMEH")
+        text = self.input_fn()                  # Get the input from the user
+        # Update the variable's value in the current frame's symbol table with the input value
+        self.set_var(name, "" if text is None else str(text))
+
+    def exec_print(self, node: Node):
+        """
+        Execute a print statement, evaluating expressions and printing their values as a concatenated string.
+        """
+        # Evaluate the expressions in the print statement
+        parts, pl = [], node.children[1]
+        while pl is not None:       # Walk through the expr_list nodes
+            # Evaluate the expression then append the parsed yarn to the parts list
+            parts.append(self.to_yarn(self.eval_expression(pl.children[0])))
+            # Iterate if there is more to the expr_list
+            pl = pl.children[2] if len(pl.children) > 2 else None
+        # Print the concatenated string to the output function
+        self.output_fn("".join(parts) + "\n")
+
+    def exec_typecast_stmt(self, node: Node):
+        """
+        Execute a typecast statement, converting a variable to a different type.
+        """
+        name = node.children[0].value.lexeme                # Get the variable name
+        target = node.children[2].children[0].value.lexeme  # Get the target type to cast to
+        # Set the variable to the casted value in the current frame's symbol table
+        self.set_var(name, self.cast(self.get_var(name), target))
+
+    def exec_return_stmt(self, node: Node):
+        """
+        Execute a return statement, returning a value from a function.
+        """
+        if not self.frame.in_function:  # If the return statement is used outside of a function, raise an error
+            raise RuntimeError("Semantic error: FOUND YR used outside of a function")
+        # Return a tuple with the signal "RETURN" and the evaluated expression value
+        return ("RETURN", self.eval_expression(node.children[1]))
+
+    def exec_conditional(self, node: Node):
+        """
+        Execute a conditional statement
+        """
+        children = node.children                # Get the children of the conditional node
+        if self.to_troof(self.get_var("IT")):   # Return the result of the first block if IT is true
+            return self.exec_block(children[4]) 
         
-        if len(node.children) > 2:
-            value_node = self.get_terminal(node.children[3]).value
-            self.symbol_table.add(variable_node.lexeme, variable_node.type, value_node.lexeme, value_node.type)
-        else:
-            self.symbol_table.add(variable_node.lexeme, variable_node.type, None, None)
+        mebbe = children[5]                     # Get first meebe block
+        # Walk through the meebe blocks, 
+        # evaluating the conditions and executing the corresponding block if a condition is true
+        while mebbe is not None and mebbe.children:
+            # Evaluate the meebe block and return if true
+            if self.to_troof(self.eval_expression(mebbe.children[1])):
+                return self.exec_block(mebbe.children[3])
+            # Continue to next if false
+            mebbe = mebbe.children[4] if len(mebbe.children) > 4 else None
 
-    def visit_loop(self, node: Node):
+        # If there is an else block, execute it if all conditions are false
+        if children[6].children:
+            return self.exec_block(children[6].children[2])
+
+    def exec_switch(self, node: Node):
         """
-        Visit a loop node in the parse tree.
-            >> Child 0: IM IN YR 
-            >> Child 1: loopident
-            >> Child 2: <loop_action> 
-            >> Child 3: YR 
-            >> Child 4: varident 
-            >> Child 5: <loop_cond> 
-            >> Child 6: <linebreak> 
-            >> Child 7: <statement_list> 
-            >> Child 8: <linebreak> 
-            >> Child 9: IM OUTTA YR 
-            >> Child 10: loopident
+        Execute a switch-case statement, evaluating the cases and executing the corresponding block.
         """
-        # Analyze the loop condition and body
-        loop_identifier     = node.children[1].value
-        loop_identifier_end = node.children[10].value
-        loop_variable = node.children[4].value
+        children = node.children        # Get the children of the switch node
+        it = self.get_var("IT")         # Get the value of the implicit IT variable to compare against the case values
 
-        # Check if the loop identifier already exists in the symbol table
-        if self.symbol_table.exists(loop_identifier.lexeme):
-            print(f"Error: Loop identifier '{loop_identifier.lexeme}' already declared.")
-            return
-        # Check if the loop identifier at the end matches the one at the beginning
-        if loop_identifier.lexeme != loop_identifier_end.lexeme:
-            print(f"Error: Loop identifier '{loop_identifier_end.lexeme}' does not match the starting identifier '{loop_identifier.lexeme}'.")
-            return
-        # Check if loop variable is declared before the loop
-        if not self.symbol_table.exists(loop_variable.lexeme):
-            print(f"Error: Loop variable '{loop_variable.lexeme}' is not declared before the loop.")
-            return
-
-        loop_variable_info = self.symbol_table.get(loop_variable.lexeme)
-        # Check if the loop variable is of type NUMBR or NUMBAR
-        if loop_variable_info['value_type'] not in [Lexeme.NUMBR_LITERAL, Lexeme.NUMBAR_LITERAL]:
-            print(f"Error: Loop variable '{loop_variable_info['value_type']}' must be of type NUMBR or NUMBAR.")
-            return
-
-        # Add the loop variable to the symbol table with its type and initial value
-        self.symbol_table.add(loop_identifier.lexeme, loop_identifier.type, None, None)
-
-        # Analyze the loop condition and body
-        self.analyze(node.children[2])  # Analyze the loop condition
-        self.analyze(node.children[5])  # Analyze the loop body
-        self.analyze(node.children[7])  # Analyze the statement list inside the loop
-
-    # <func_def> ::= HOW IZ I funcident <linebreak> <statement_list> IF U SAY SO | 
-    #                HOW IZ I funcident <func_params> <linebreak> <statement_list> IF U SAY SO
-    def visit_func_def(self, node: Node):
-        """
-        Visit a function definition node in the parse tree.
-            >> Child 0: HOW IZ I
-            >> Child 1: funcident
-            >> Child _/2: <func_params> (optional)
-            >> Child 2/3: <linebreak>
-            >> Child 3/4: <statement_list>
-            >> Child 4/5: IF U SAY SO
-        """
-        func_identifier = node.children[1].value
-
-        # Check if the function identifier already exists in the symbol table
-        if self.symbol_table.exists(func_identifier.lexeme):
-            print(f"Error: Function identifier '{func_identifier.lexeme}' already declared.")
-            return
-
-        # Analyze the function parameters if they exist
-        if len(node.children) == 6:  # Function has parameters
-            function_parameters_node = node.children[2]
-            params = self.analyze(function_parameters_node)  # Analyze the function parameter list
-            self.symbol_table.add(func_identifier.lexeme, func_identifier.type, None, None, 
-                                  parameters=params, return_type=None)
-        else:  # Function has no parameters
-            self.symbol_table.add(func_identifier.lexeme, func_identifier.type, None, None, 
-                                  parameters=[], return_type=None)
-        # Analyze the function body (statement list)
-        self.analyze(node.children[4])  # Analyze the statement list inside the function
-
-    # <func_params> ::= YR varident | YR varident AN <func_params>
-    def visit_func_params(self, node: Node):
-        """
-        Visit a function parameters node in the parse tree.
-            >> Child 0: YR
-            >> Child 1: varident
-            >> Child 2: AN (optional)
-            >> Child 3: <func_params> (optional)
-        """
-        params = []
-        var_ident_node = node.children[1].value
-        params.append(var_ident_node)
-        if len(node.children) > 2:
-            # Recursively analyze the next parameter
-            params.extend(self.visit_func_params(node.children[3]))
-        return params
-
-    # <func_call> ::= I IZ funcident MKAY | I IZ funcident <call_args> MKAY
-    def visit_func_call(self, node):
-        """
-        Visit a function call node in the parse tree.
-            >> Child 0: I IZ
-            >> Child 1: funcident
-            >> Child _/2: <call_args> (optional)
-            >> Child 2/3: MKAY
-        """
-        func_identifier = node.children[1].value
-
-        # Check if the function identifier exists in the symbol table
-        if not self.symbol_table.exists(func_identifier.lexeme):
-            print(f"Error: Function identifier '{func_identifier.lexeme}' is not declared.")
-            return
+        cases, case = [], children[2]   # Get the list of cases and the first case node
+        # Build the list of cases and their corresponding blocks
+        while case is not None and case.children:
+            # Append a tuple of the case literal value and the corresponding block to the cases list
+            cases.append((self.literal_value(case.children[1].children[0].value), case.children[3]))
+            case = case.children[4] if len(case.children) > 4 else None # Move to the next case node if it exists
         
-        function_info = self.symbol_table.get(func_identifier.lexeme)
+        # Build the list of blocks to execute, including the default block if it exists
+        blocks = [body for _, body in cases]
+        default = children[3].children[2] if children[3].children else None
+        # Add the default block to the list of blocks if it exists
+        if default is not None:
+            blocks.append(default)
 
-        args = []
-        # Analyze the function call arguments if they exist
-        if len(node.children) == 4:  # Function call has arguments
-            function_arguments_node = node.children[2]
-            args = self.analyze(function_arguments_node)  # Analyze the function argument list
-
-        # Check if the type and number of arguments match the function definition
-        if len(args) != len(function_info['parameters']):
-            print(f"Error: Function '{func_identifier.lexeme}' expects {len(function_info['parameters'])} arguments, but {len(args)} were provided.")
-            return
-
-    def visit_call_args(self, node: Node):
-        """
-        Visit a function call arguments node in the parse tree.
-            >> Child 0: <expression>
-            >> Child 1: AN (optional)
-            >> Child 2: <call_args> (optional)
-        """
-        if len(node.children) == 0:
-            return []
-        
-        params = []
-        var_ident_node = node.children[1].value
-        params.append(var_ident_node)
-        if len(node.children) > 2:
-            # Recursively analyze the next parameter
-            params.extend(self.visit_func_params(node.children[3]))
-        return params
-
-    # Conditional statements
-    # <conditional> ::= O RLY? <linebreak> YA RLY <linebreak> <statement_list> <mebbe_blocks> <no_wai_block> OIC
-    def visit_call_conditional(self, node: Node):
-        """
-        Visit a conditional statement node in the parse tree.
-            >> Child 0: O RLY?
-            >> Child 1: <linebreak>
-            >> Child 2: YA RLY
-            >> Child 3: <linebreak>
-            >> Child 4: <statement_list>
-            >> Child 5: <mebbe_blocks> (optional)
-            >> Child 6: <no_wai_block> (optional)
-            >> Child 7: OIC
-        """
-        # Analyze the statement list for the YA RLY block
-        self.analyze(node.children[4])  # Analyze the statement list inside the YA RLY block
-
-        # Analyze the MEBBE blocks if they exist
-        if len(node.children) > 5:
-            mebbe_blocks_node = node.children[5]
-            self.analyze(mebbe_blocks_node)  # Analyze the MEBBE blocks
-
-        # Analyze the NO WAI block if it exists
-        if len(node.children) > 6:
-            no_wai_block_node = node.children[6]
-            self.analyze(no_wai_block_node)  # Analyze the NO WAI block
-
-    def visit_mebbe_blocks(self, node: Node):
-        """
-        Visit a MEBBE blocks node in the parse tree.
-            >> Child 0: MEBBE
-            >> Child 1: <expression>
-            >> Child 2: <linebreak>
-            >> Child 3: <statement_list>
-            >> Child 4: <mebbe_blocks> (optional)
-        """
-        if len(node.children) < 3:
-            return
-        # Analyze the statement list for the current MEBBE block
-        self.analyze(node.children[3])  # Analyze the statement list inside the current MEBBE block
-
-        # Analyze the next MEBBE block if it exists
-        if len(node.children) > 4:
-            mebbe_blocks_node = node.children[4]
-            self.analyze(mebbe_blocks_node)  # Analyze the next MEBBE block
-
-    def visit_no_wai_block(self, node: Node):
-        """
-        Visit a NO WAI block node in the parse tree.
-            >> Child 0: NO WAI
-            >> Child 1: <linebreak>
-            >> Child 2: <statement_list>
-        """
-        if len(node.children) < 2:
-            return
-        # Analyze the statement list for the NO WAI block
-        self.analyze(node.children[2])  # Analyze the statement list inside the NO WAI block
-
-    # Switch statements
-    # <switch> ::= WTF? <linebreak> <case_blocks> <default_block> OIC
-    def visit_switch(self, node: Node):
-        """
-        Visit a switch statement node in the parse tree.
-            >> Child 0: WTF?
-            >> Child 1: <linebreak>
-            >> Child 2: <case_blocks>
-            >> Child 3: <default_block> (optional)
-            >> Child 4: OIC
-        """
-        # Analyze the case blocks
-        self.analyze(node.children[2])  # Analyze the case blocks
-
-        # Analyze the default block if it exists
-        if len(node.children) > 3:
-            default_block_node = node.children[3]
-            self.analyze(default_block_node)  # Analyze the default block
-        
-    # <case_blocks> ::= OMG <literal> <linebreak> <statement_list> | OMG <literal> <linebreak> <statement_list> <case_blocks>
-    def visit_case_blocks(self, node: Node):
-        """
-        Visit a case blocks node in the parse tree.
-            >> Child 0: OMG
-            >> Child 1: <literal>
-            >> Child 2: <linebreak>
-            >> Child 3: <statement_list>
-            >> Child 4: <case_blocks> (optional)
-        """
-        # Analyze the statement list for the current case block
-        self.analyze(node.children[3])  # Analyze the statement list inside the current case block
-
-        # Analyze the next case block if it exists
-        if len(node.children) > 4:
-            case_blocks_node = node.children[4]
-            self.analyze(case_blocks_node)  # Analyze the next case block
-        
-    # Assignment
-    # <assignment> ::= varident R <expression>
-    def visit_assignment(self, node: Node):
-        """
-        Visit an assignment node in the parse tree.
-            >> Child 0: varident
-            >> Child 1: R
-            >> Child 2: <expression>
-        """
-        var_ident_node = node.children[0].value
-        expression_node = node.children[2]
-
-        # Check if the variable is declared before assignment
-        if not self.symbol_table.exists(var_ident_node.lexeme):
-            print(f"Error: Variable '{var_ident_node.lexeme}' is not declared before assignment.")
-            return
-
-        # Analyze the expression to get its value and type
-        expression_value_node = self.get_terminal(expression_node)
-        expression_value = expression_value_node.value
-        # Check if the type of the expression matches the type of the variable
-        variable_info = self.symbol_table.get(var_ident_node.lexeme)
-        if variable_info['value_type'] != expression_value.type:
-            print(f"Error: Type mismatch in assignment. Variable '{var_ident_node.lexeme}' is of type '{variable_info['value_type']}', but the expression is of type '{expression_value.type}'.")
-            return
-        
-        # Update the symbol table with the new value and type for the variable
-        self.symbol_table.add(var_ident_node.lexeme, var_ident_node.type, expression_value.lexeme, expression_value.type)
-
-    # Arithmetic operations
-    # <arithmetic_expr> ::= SUM OF <expression> AN <expression> | DIFF OF <expression> AN <expression> | PRODUKT OF <expression> AN <expression> | QUOSHUNT OF <expression> AN <expression> | MOD OF <expression> AN <expression> | BIGGR OF <expression> AN <expression> | SMALLR OF <expression> AN <expression>
-    def visit_arithmetic_expr(self, node: Node):
-        """
-        Visit an arithmetic expression node in the parse tree.
-            >> Child 0: SUM OF | DIFF OF | PRODUKT OF | QUOSHUNT OF | MOD OF | BIGGR OF | SMALLR OF
-            >> Child 1: <expression>
-            >> Child 2: AN
-            >> Child 3: <expression>
-        """
-        if node.value != 'arithmetic_expr':
-            # Expand the children if any
-            # Assume that if there is children, it is not a terminal node
-            for child in node.children:
-                self.visit_arithmetic_expr(child)
-
-            # If it is a terminal node (Token)
-            # This is the base case, analyze the terminal            
-            if isinstance(node.value, Token):
-                node_type = node.value.type                 # Set the node_type to the node.value.type
-                node_val  = node.value.lexeme               # Set the node_val to the node.value.lexeme
-                if node.value.type == Lexeme.VARIABLE_IDENTIFIER:
-                    # Check the type of the variable if it is a YARN_LITERAL, NUMBAR_LITERAL, or a NUMBR_LITERAL
-                    var_info = self.symbol_table.get(node.value.lexeme)
-                    if not var_info:
-                        print(f"Error: Variable {node.value.lexeme} is not initialized.")
-                        return
-                    node_type = var_info['value_type']      # Make the node_type to the value_type of the variable
-                    node_val  = var_info['value']           # Make the node_value to the value of the variable
-
-                # Typecheck the literal values of the arithmetic expression
-                # Implicit type conversion for YARN (string) to NUMBR or NUMBAR is allowed
-                # Only try to convert if it is valid to convert to NUMBR or NUMBAR
-                if node_type == Lexeme.YARN_LITERAL:
-                    conv = self.convert_yarn_to_num(node_val)
-                    if conv is None:
-                        print(f"Error: Cannot convert operand '{node_val}' of type YARN to NUMBR or NUMBAR.")
-                        return
-                elif node_type not in [Lexeme.NUMBR_LITERAL, Lexeme.NUMBAR_LITERAL]:
-                    print(f"Error: Arithmetic operations require operands to be of type NUMBR or NUMBAR. Found type '{node_val}'.")
-                    return
-            return
-        
-        # Get the left and right expression        
-        left_expression_node = node.children[1]
-        right_expression_node = node.children[3]
-
-        # Expand until the terminal node is reach
-        self.visit_arithmetic_expr(left_expression_node)
-        self.visit_arithmetic_expr(right_expression_node)
-        return
-    
-    def convert_yarn_to_num(self, lexeme: str) -> tuple:
-        if re.search(r'^"-?\d+"$', lexeme):
-            return Lexeme.NUMBR_LITERAL
-        elif re.search(r'^"-?\d+\.\d+"$', lexeme):
-            return Lexeme.NUMBAR_LITERAL
-        else:
-            return None
-    # Comparison operations
-    # <comparison_expr> ::= BOTH SAEM <expression> AN <expression> | DIFFRINT <expression> AN <expression>
-    def visit_comparison_expr(self, node: Node):
-        """
-        Visit a comparison expression node in the parse tree.
-            >> Child 0: BOTH SAEM | DIFFRINT
-            >> Child 1: <expression>
-            >> Child 2: AN
-            >> Child 3: <expression>
-        """
-        # Analyze the left and right expressions
-        left_expression_node = node.children[1]
-        right_expression_node = node.children[3]
-
-        left_value_node = self.get_terminal(left_expression_node)
-        right_value_node = self.get_terminal(right_expression_node)
-
-        # Calculate the types of the left and right expressions
-        if left_value_node.value.type == Lexeme.VARIABLE_IDENTIFIER:
-            data = self.symbol_table.get(left_value_node.value.lexeme)
-            if data is None:
-                print(f"Error: Variable '{left_value_node.value.lexeme}' is not declared before comparison.")
+        # Find the index of the first case that matches the value of IT, 
+        # Use the default block if no match is found
+        start = None
+        for i, (lit, _) in enumerate(cases):
+            if self.values_equal(it, lit):
+                start = i
+                break
+        # If no matching case is found, start from the default block if it exists
+        if start is None:
+            if default is None:
                 return
-            left_type = data['value_type']
-        else:
-            left_type = left_value_node.value.type
+            start = len(cases)
 
-        if right_value_node.value.type == Lexeme.VARIABLE_IDENTIFIER:
-            data = self.symbol_table.get(right_value_node.value.lexeme)
-            if data is None:
-                print(f"Error: Variable '{right_value_node.value.lexeme}' is not declared before comparison.")
-                return
-            right_type = data['value_type']
-        else:
-            right_type = right_value_node.value.type
+        # Add 1 to the break depth to allow GTFO inside the switch-case block
+        self.frame.break_depth += 1
+        signal = None
+        # Walk through the cases and default block
+        for body in blocks[start:]:
+            signal = self.exec_block(body)
+            # Handle control flow signals (BREAK, RETURN) and exit the switch-case block accordingly
+            if signal == "BREAK":
+                signal = None 
+                break
+            if signal is not None: 
+                break
+        # Decrease the break depth after exiting the switch-case block
+        self.frame.break_depth -= 1
+        return signal
 
-        # Check if both expressions are of the same type
-        if left_type != right_type:
-            print(f"Error: Comparison operations require both operands to be of the same type. Found types '{left_value_node.value.type}' and '{right_value_node.value.type}'.")
-            return
-
-    # Loop Condition
-    # <loop_cond> ::= TIL <expression> | WILE <expression> | ε
-    def visit_loop_cond(self, node: Node):
+    def exec_loop(self, node: Node):
         """
-        Visit a loop condition node in the parse tree.
-            >> Child 0: TIL | WILE
-            >> Child 1: <expression>
+        Execute a loop statement, iterating based on the loop condition and executing the loop body.
         """
-        if len(node.children) == 0:
-            return  # No loop condition
+        children = node.children        # Get the children of the loop node
+        frame = self.frame              # Get the current frame for scoping
 
-        loop_condition_type = node.children[0].value
-        expression_node = node.children[1]
+        label, end_label = children[1].value.lexeme, children[10].value.lexeme  # Get the label and end label of the loop
+        action = children[2].children[0].value.type                             # Get the action
+        var = children[4].value.lexeme                                          # Get the loop variable
+        cond, body = children[5], children[7]                                   # Get the condition and body of the loop
 
-        expression_value_nodes = self.get_terminals(expression_node)
-        expression_value_node = expression_value_nodes[0]  # Assuming the first terminal node is the value of the expression
-        # Check if the expression is of type TROOF (BOTH SAEM, DIFFRINT)
-        if expression_value_node.value.type not in [Lexeme.BOTH_SAEM, Lexeme.DIFFRINT]:
-            print(f"Error: Loop condition must be a comparison operation. Found '{expression_value_node.value.type}'.")
-            return
+        if label != end_label:          # Make sure that the loop label and end label match
+            raise RuntimeError(f"Semantic error: Loop label '{end_label}' does not match '{label}'")
+        if label in frame.loop_labels:  # Make sure that the loop label is not already used by an enclosing loop
+            raise RuntimeError(f"Semantic error: Loop label '{label}' is already used by an enclosing loop")
+        if not frame.table.exists(var): # Var must be declared
+            raise RuntimeError(f"Semantic error: Loop variable '{var}' is not declared")
 
-    # Typecasting
-    # <typecast_stmt> ::= varident IS NOW A type
-    def visit_typecast_stmt(self, node: Node):
+        # Add loop label to the frame
+        frame.loop_labels.append(label)
+        # Increase the break depth to allow GTFO inside the loop
+        frame.break_depth += 1
+        signal = None
+
+        # Execute the loop until the condition is met or a control flow signal is encountered
+        while True:
+            if cond.children:   # If there is a condition, evaluate it and check if the loop should continue
+                keep = self.to_troof(self.eval_expression(cond.children[1]))
+                if cond.children[0].value.type == Lexeme.TIL and keep: break
+                if cond.children[0].value.type == Lexeme.WILE and not keep: break
+
+            # Execute the loop body and check for control flow signals (BREAK, RETURN)
+            signal = self.exec_block(body)
+
+            # Handle control flow signals
+            if signal == "BREAK":
+                signal = None 
+                break
+            if signal is not None:
+                break
+            
+            # Update the loop variable based on the action (UPPIN or NERFIN)
+            current = self.to_number(self.get_var(var))
+            # Increment or decrement the loop variable based on the action type
+            self.set_var(var, current + 1 if action == Lexeme.UPPIN else current - 1)
+
+        # Cleanup after the loop execution
+        # Remove the loop label and decrease the break depth
+        frame.break_depth -= 1
+        frame.loop_labels.pop()
+        return signal
+
+    def eval_expression(self, node: Node):
         """
-        Visit a typecasting statement node in the parse tree.
-            >> Child 0: varident
-            >> Child 1: IS NOW A
-            >> Child 2: type
+        Execute an expression node and return its evaluated value.
         """
-        var_ident_node = node.children[0].value
-        type_node = node.children[2].value
+        inner = node.children[0]        # Get the first child of the expression node
+        # Call the appropriate evaluation method based on the type of expression
+        return getattr(self, f"eval_{inner.value}")(inner)
 
-        # Check if the variable is declared before typecasting
-        if not self.symbol_table.exists(var_ident_node.lexeme):
-            print(f"Error: Variable '{var_ident_node.lexeme}' is not declared before typecasting.")
-            return
+    def eval_operand(self, node: Node):
+        """
+        Execute an operand node, which can be a variable or a literal, and return its value.
+        """
+        child = node.children[0]            # Get the first child of the operand node
+        if isinstance(child.value, Token):  # If the child is a Token, it is a variable, so return its value
+            return self.get_var(child.value.lexeme)
+        # If the child is not a Token, it is a literal, so return its literal value
+        return self.literal_value(child.children[0].value)
 
-        # Update the symbol table with the new type for the variable
-        variable_info = self.symbol_table.get(var_ident_node.lexeme)
-        self.symbol_table.add(var_ident_node.lexeme, var_ident_node.type, variable_info['value'], type_node.lexeme)
+    def eval_arithmetic_expr(self, node: Node):
+        """
+        Execute an arithmetic expression node, performing the specified operation on its operands and returning the result.
+        """
+        children = node.children        # Get children of the arithmetic expression node
+        op = children[0].value.type     # Get operations
+        # Get the evaluated values of the operands and convert them to numbers
+        x = self.to_number(self.eval_expression(children[1]))
+        y = self.to_number(self.eval_expression(children[3]))
+
+        # Check if both operands are integers for certain operations
+        both_int = isinstance(x, int) and isinstance(y, int)
+
+        # Calculate the result based on the operation type
+        if op == Lexeme.SUM_OF: 
+            return x + y
+        if op == Lexeme.DIFF_OF: 
+            return x - y
+        if op == Lexeme.PRODUKT_OF:
+            return x * y
+        if op in (Lexeme.QUOSHUNT_OF, Lexeme.MOD_OF):
+            # Handle division by zero error for QUOSHUNT_OF and MOD_OF operations
+            if y == 0: raise RuntimeError("Semantic error: Division by zero")
+            if op == Lexeme.QUOSHUNT_OF:
+                # Divide x and y using trunc_div for int division
+                return self.trunc_div(x, y) if both_int else x / y
+            # Calculate for the modulo operation
+            return x - y * self.trunc_div(x, y) if both_int else math.fmod(x, y)
+
+        # Handle BIGGR_OF and SMALLR_OF operations, returning the maximum or minimum of the two operands
+        result = max(x, y) if op == Lexeme.BIGGR_OF else min(x, y)
+        return result if both_int else float(result)
+
+    @staticmethod
+    def trunc_div(x: int, y: int) -> int:
+        """
+        Execute truncating division of two integers, returning the quotient rounded towards zero.
+        """
+        # Calculate for abs division of two variables
+        q = abs(x) // abs(y)
+        # Return the quotient rounded towards zero, adjusting the sign based on the signs of x and y
+        return -q if (x < 0) != (y < 0) else q
+
+    def eval_boolean_expr(self, node: Node):
+        """
+        Execute a boolean expression node.
+        Perform the specified logical operation on its operands and returning the result.
+        """
+        children = node.children            # Get the children of the boolean expression node
+        op = children[0].value.type         # Get the operator type of the boolean expression
+        if op == Lexeme.NOT:                        # Evaluate NOT op
+            return not self.to_troof(self.eval_expression(children[1]))
+        if op in (Lexeme.ALL_OF, Lexeme.ANY_OF):    # Evaluate ALL OF or ANY OF op
+            values = [self.to_troof(self.eval_expression(e)) for e in self.flatten_expr_list(children[1])]
+            return all(values) if op == Lexeme.ALL_OF else any(values)
         
+        # Evaluate BOTH OF, EITHER OF, or DIFFRINT OF op
+        a = self.to_troof(self.eval_expression(children[1]))    # Evaluate the first operand and convert it to a boolean (TROOF)
+        b = self.to_troof(self.eval_expression(children[3]))    # Evaluate the second operand and convert it to a boolean (TROOF)
+        if op == Lexeme.BOTH_OF: return a and b     # Evaluate BOTH OF expression
+        if op == Lexeme.EITHER_OF: return a or b    # Evaluate EITHER OF expression
+        return a != b   # Evaluate IS DIFFRINT expression 
+
+    def eval_comparison_expr(self, node: Node):
+        """
+        Evaluate a comparison expression node, checking for equality or inequality between its operands and returning the result.
+        """
+        children = node.children        # Get the children of the comparison expression node
+        # Check if the values of the two operands are equal using the values_equal method
+        equal = self.values_equal(self.eval_expression(children[1]), self.eval_expression(children[3]))
+        return equal if children[0].value.type == Lexeme.BOTH_SAEM else not equal
+
+    def eval_concatenation_expr(self, node: Node):
+        """
+        Evaluate a concatenation expression node, joining the string representations of its operands and returning the result.
+        """
+        # Concatenate the string expressions
+        return "".join(self.to_yarn(self.eval_expression(e))
+                       for e in self.flatten_expr_list(node.children[1]))
+
+    def eval_typecast_expr(self, node: Node):
+        """
+        Evaluate a typecast expression node, converting the value of an expression to a specified target type and returning the result.
+        """
+        children = node.children                        # Get the children of the typecast expression node
+        target = children[-1].children[0].value.lexeme  # Get the target type for the typecast from the last child node
+        return self.cast(self.eval_expression(children[1]), target)
+
+    def eval_func_call(self, node: Node):
+        """
+        Evaluate a function call expression node, executing the function with the provided arguments and returning the result.
+        """
+        children = node.children            # Get the children of the function call node
+        name = children[1].value.lexeme     # Get name
+        # Get the list of args and attr_nodes
+        args, attr_node = [], children[2] if len(children) == 4 else None
+        # Iterate through the attribute nodes to collect the arguments for the function call
+        while attr_node is not None:
+            args.append(self.eval_expression(attr_node.children[1]))
+            attr_node = attr_node.children[3] if len(attr_node.children) > 3 else None
+        # Call function with the collected arguments and return the result
+        return self.call_function(name, args)

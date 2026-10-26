@@ -1,10 +1,36 @@
-IGNORE_CHARS = [',']
-
 import re
 from model.lexeme import Lexeme
 from model.token import Token
 
+# Lexeme patterns for LOLCODE regex matching
+LEXEME_PATTERNS = [
+    r"HAI\b", r"KTHXBYE\b", r"WAZZUP\b", r"BUHBYE\b",
+    r"BTW\b", r"OBTW\b", r"TLDR\b",
+    r"I HAS A\b", r"ITZ\b", r"R\b",
+    r"SUM OF\b", r"DIFF OF\b", r"PRODUKT OF\b", r"QUOSHUNT OF\b", r"MOD OF\b",
+    r"BIGGR OF\b", r"SMALLR OF\b",
+    r"BOTH OF\b", r"EITHER OF\b", r"WON OF\b", r"NOT\b", r"ANY OF\b", r"ALL OF\b",
+    r"BOTH SAEM\b", r"DIFFRINT\b",
+    r"SMOOSH\b", r"MAEK\b", r"AN\b", r"A\b", r"IS NOW A\b",
+    r"VISIBLE\b", r"GIMMEH\b",
+    r"O RLY\?", r"YA RLY\b", r"MEBBE\b", r"NO WAI\b", r"OIC\b",
+    r"WTF\?", r"OMGWTF\b", r"OMG\b",
+    r"IM IN YR\b", r"UPPIN\b", r"NERFIN\b", r"YR\b", r"TIL\b", r"WILE\b", r"IM OUTTA YR\b",
+    r"HOW IZ I\b", r"IF U SAY SO\b", r"GTFO\b", r"FOUND YR\b", r"I IZ\b", r"MKAY\b",
+    r"\+",
+    r"[a-zA-Z][a-zA-Z0-9_]*",       # identifiers / WIN / FAIL / type names (spec: must start with a letter)
+    r"-?\d+\.\d+",                  # NUMBAR
+    r"-?\d+",                       # NUMBR
+    r'"[^"\n]*"',                   # YARN (no newline inside)
+]
+# Compile the regex patterns into a single regex for matching lexemes
+LEXEME_REGEX = re.compile("|".join(f"(?:{p})" for p in LEXEME_PATTERNS))
+
+
 class LexicalAnalyzer:
+    """
+    Handles the tokenization of the raw input string into a list of tokens.
+    """
     def __init__(self):
         pass
 
@@ -20,83 +46,29 @@ class LexicalAnalyzer:
         """
         Parse the raw contents into lexeme list
         """
-        # Tokenize the input string
+        # Normalize Windows/old-Mac line endings so '\r' never reaches the token stream
+        raw_content = raw_content.replace("\r\n", "\n").replace("\r", "\n")
+        raw_content = self.lexeme_strip(raw_content)
+
         lexeme_list = []
         multiline_flag = False
         while raw_content not in ["", None]:
-            # TODO: Add \b for all identifiers regexes
-            #       To handle the cases of variables with identifiers inside
-            #       ONLY ONE LINERS!!!
-            if out := re.search("^HAI\b", raw_content)\
-                or re.search("^KTHXBYE\b", raw_content)\
-                or re.search("^WAZZUP\b", raw_content)\
-                or re.search("^BUHBYE\b", raw_content)\
-                or re.search("^BTW\b", raw_content)\
-                or re.search("^OBTW\b", raw_content)\
-                or re.search("^TLDR\b", raw_content)\
-                or re.search("^I HAS A", raw_content)\
-                or re.search("^ITZ\b", raw_content)\
-                or re.search("^R", raw_content)\
-                or re.search("^SUM OF", raw_content)\
-                or re.search("^DIFF OF", raw_content)\
-                or re.search("^PRODUKT OF", raw_content)\
-                or re.search("^QUOSHUNT OF", raw_content)\
-                or re.search("^MOD OF", raw_content)\
-                or re.search("^BIGGR OF", raw_content)\
-                or re.search("^SMALLR OF", raw_content)\
-                or re.search("^BOTH OF", raw_content)\
-                or re.search("^EITHER OF", raw_content)\
-                or re.search("^WON OF", raw_content)\
-                or re.search("^NOT\b", raw_content)\
-                or re.search("^ANY OF", raw_content)\
-                or re.search("^ALL OF", raw_content)\
-                or re.search("^BOTH SAEM", raw_content)\
-                or re.search("^DIFFRINT\b", raw_content)\
-                or re.search("^SMOOSH\b", raw_content)\
-                or re.search("^MAEK\b", raw_content)\
-                or re.search("^AN\b", raw_content)\
-                or re.search("^A\b", raw_content)\
-                or re.search("^IS NOW A", raw_content)\
-                or re.search("^VISIBLE\b", raw_content)\
-                or re.search("^GIMMEH\b", raw_content)\
-                or re.search("^O RLY\\?", raw_content)\
-                or re.search("^YA RLY", raw_content)\
-                or re.search("^MEBBE\b", raw_content)\
-                or re.search("^NO WAI", raw_content)\
-                or re.search("^OIC\b", raw_content)\
-                or re.search("^WTF\\?", raw_content)\
-                or re.search("^OMGWTF\b", raw_content)\
-                or re.search("^OMG\b", raw_content)\
-                or re.search("^IM IN YR", raw_content)\
-                or re.search("^UPPIN\b", raw_content)\
-                or re.search("^NERFIN\b", raw_content)\
-                or re.search("^YR\b", raw_content)\
-                or re.search("^TIL\b", raw_content)\
-                or re.search("^WILE\b", raw_content)\
-                or re.search("^IM OUTTA YR", raw_content)\
-                or re.search("^HOW IZ I", raw_content)\
-                or re.search("^IF U SAY SO", raw_content)\
-                or re.search("^GTFO\b", raw_content)\
-                or re.search("^FOUND YR", raw_content)\
-                or re.search("^I IZ", raw_content)\
-                or re.search("^MKAY\b", raw_content)\
-                or re.search("^ON\b", raw_content)\
-                or re.search(r"^\+", raw_content)\
-                or re.search("^[a-zA-Z_][a-zA-Z0-9_]*", raw_content)\
-                or re.search("^-?\\d+\\.\\d+", raw_content)\
-                or re.search("^-?\\d+", raw_content)\
-                or re.search("^\"[^\"]*\"", raw_content)\
-                or re.search("^(WIN|FAIL)", raw_content)\
-                or re.search("^(NUMBR|NUMBAR|YARN|TROOF)", raw_content):
-                lexeme_list.append(out.group(0))
+            if out := LEXEME_REGEX.match(raw_content):
+                lexeme = out.group(0)
+                lexeme_list.append(lexeme)
                 # Remove the matched string from the raw_content
                 raw_content = self.lexeme_strip(raw_content[out.end():])
+                # Comments are swallowed as raw text, NOT tokenized as code
+                if lexeme == "BTW":
+                    raw_content = self.consume_line_comment(raw_content, lexeme_list)
+                elif lexeme == "OBTW":
+                    raw_content = self.consume_block_comment(raw_content, lexeme_list)
             elif out := re.search("^\n", raw_content):
                 if not multiline_flag:
                     lexeme_list.append(out.group(0))
                 raw_content = self.lexeme_strip(raw_content[out.end():])
             elif out := re.search("^,", raw_content):
-                # Split into newline
+                # Soft command break: split into newline
                 raw_content = self.lexeme_strip(raw_content[out.end():])
                 lexeme_list.append('\n')
             elif out := re.search("^\\.\\.\\.", raw_content):
@@ -108,23 +80,60 @@ class LexicalAnalyzer:
                 out = re.search("^.", raw_content)
                 lexeme_list.append(out.group(0))
                 # Remove the matched string from the raw_content
-                raw_content = self.lexeme_strip(raw_content[out.end():])        # If the newline didn't consume after the ..., 
+                raw_content = self.lexeme_strip(raw_content[out.end():])
             # Or if it already consume, it will turn off the multiline_flag
             multiline_flag = False
         return lexeme_list
+
+    def consume_line_comment(self, raw_content: str, lexeme_list: list[str]) -> str:
+        """
+        After a BTW: take the rest of the line as ONE comment lexeme.
+        The newline itself is left for the main loop.
+        """
+        line = re.match(r"[^\n]*", raw_content)
+        text = line.group(0).rstrip()
+        if text:
+            lexeme_list.append(text)
+        return raw_content[line.end():]
+
+    def consume_block_comment(self, raw_content: str, lexeme_list: list[str]) -> str:
+        """
+        After an OBTW: emit each comment line as ONE lexeme (plus its newline) until a
+        line starting with TLDR. The TLDR line is left for the main loop to tokenize.
+        If TLDR never appears, everything is consumed and the syntax analyzer reports it.
+        """
+        # Optional comment text on the OBTW line itself
+        line = re.match(r"[^\n]*", raw_content)
+        text = line.group(0).strip()
+        if text:
+            lexeme_list.append(text)
+        raw_content = raw_content[line.end():]
+
+        while raw_content:
+            lexeme_list.append("\n")                 # the newline ending the previous line
+            raw_content = raw_content[1:]
+            line = re.match(r"[^\n]*", raw_content)
+            if re.match(r"[ \t]*TLDR\b", line.group(0)):
+                return self.lexeme_strip(raw_content)
+            text = line.group(0).strip()
+            if text:
+                lexeme_list.append(text)
+            raw_content = raw_content[line.end():]
+        return raw_content
 
     def parser(self, lexeme_list: list[str]) -> list[Token]:
         """
         Parse the lexeme list into tokens (lexeme, type) tuple
         """
         # Tokenize the input string
-        comment_flag = False
+        comment_flag = False            # inside a BTW line comment
+        block_comment_flag = False      # inside an OBTW ... TLDR block
         token_list = []
         for raw_str in lexeme_list:
             if re.search("^\n", raw_str):
                 comment_flag = False
                 token_list.append(Token(raw_str, Lexeme.NEWLINE))
-            elif comment_flag:
+            elif comment_flag or (block_comment_flag and raw_str != "TLDR"):
                 token_list.append(Token(raw_str, Lexeme.COMMENT_IDENTIFIER))
             else:
                 if re.search("^HAI$", raw_str):
@@ -135,14 +144,16 @@ class LexicalAnalyzer:
                     token_list.append(Token(raw_str, Lexeme.WAZZUP))
                 elif re.search("^BUHBYE$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.BUHBYE))
-                elif re.search("^BTW", raw_str):
+                elif re.search("^BTW$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.BTW))
                     comment_flag = True
                 elif re.search("^OBTW$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.OBTW))
+                    block_comment_flag = True
                 elif re.search("^TLDR$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.TLDR))
-                elif re.search("^I HAS A", raw_str):
+                    block_comment_flag = False
+                elif re.search("^I HAS A$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.I_HAS_A))
                 elif re.search("^ITZ$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.ITZ))
@@ -252,13 +263,14 @@ class LexicalAnalyzer:
                 # YARN literals
                 elif re.search("^\"[^\"]*\"$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.YARN_LITERAL))
-                # Variable identifiers
-                elif re.search("^[a-zA-Z_][a-zA-Z0-9_]*$", raw_str):
+                # Variable identifiers (must start with a letter)
+                elif re.search("^[a-zA-Z][a-zA-Z0-9_]*$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.IDENTIFIER))
                 else:
-                    print(f"Unrecognized lexeme >>{raw_str}")
+                    # A lexical error must stop the run, not be silently dropped
+                    raise SyntaxError(f"Lexical error: unrecognized lexeme '{raw_str}'")
         return token_list
-            
+
     def lexeme_strip(self, raw_content) -> str:
         """
         Remove whitespace in the left except for newlines
