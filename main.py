@@ -1,23 +1,9 @@
-import pprint
-from lexical_analyzer import LexicalAnalyzer
-from semantic_analyzer import SemanticAnalyzer 
-from syntax_analyzer import Parser
+from components.interpreter import LOLCODEInterpreter
 
-def read_file(file_path):
-    with open(file_path, "r") as file:
-        return file.read()
-
-def main():
-    raw_content = read_file("full_spec_test.lol")          # Read the raw text
-
-    lexer = LexicalAnalyzer()                       # Create the lexer object then run
-    tokens = lexer.run(raw_content)
-    parser = Parser(tokens)                         # Create the parser object then run
-    parse_tree = parser.parse()
-
-    semantic_analyzer = SemanticAnalyzer()          # Create the semantic analyzer then run
-    semantic_analyzer.run(parse_tree)
-
+# TODO: Add your backend code here
+#       You can use the LOLCODEInterpreter class to run your LOLCODE programs.
+#       Only provide the file_location in the run method of the interpreter.
 
 if __name__ == "__main__":
-    main()
+    interpreter = LOLCODEInterpreter()
+    interpreter.run("example.lol")

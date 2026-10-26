@@ -46,12 +46,12 @@ class LexicalAnalyzer:
         """
         Parse the raw contents into lexeme list
         """
-        # Normalize Windows/old-Mac line endings so '\r' never reaches the token stream
+        # Ensure that newlines are \n and strip leading whitespace (except for newlines)
         raw_content = raw_content.replace("\r\n", "\n").replace("\r", "\n")
         raw_content = self.lexeme_strip(raw_content)
 
-        lexeme_list = []
-        multiline_flag = False
+        lexeme_list = []            # List to hold the lexemes
+        multiline_flag = False      # Flag to indicate if we are in a multiline 
         while raw_content not in ["", None]:
             if out := LEXEME_REGEX.match(raw_content):
                 lexeme = out.group(0)
@@ -68,9 +68,9 @@ class LexicalAnalyzer:
                     lexeme_list.append(out.group(0))
                 raw_content = self.lexeme_strip(raw_content[out.end():])
             elif out := re.search("^,", raw_content):
-                # Soft command break: split into newline
+                # Soft command break
                 raw_content = self.lexeme_strip(raw_content[out.end():])
-                lexeme_list.append('\n')
+                lexeme_list.append('\n')    # Add a newline to split the statements
             elif out := re.search("^\\.\\.\\.", raw_content):
                 # Continue the line
                 raw_content = self.lexeme_strip(raw_content[out.end():])
@@ -87,20 +87,19 @@ class LexicalAnalyzer:
 
     def consume_line_comment(self, raw_content: str, lexeme_list: list[str]) -> str:
         """
-        After a BTW: take the rest of the line as ONE comment lexeme.
-        The newline itself is left for the main loop.
+        Handles the line comment starting with BTW.
+        Makes the succeeding text into a single lexeme until the end of the line.
         """
-        line = re.match(r"[^\n]*", raw_content)
-        text = line.group(0).rstrip()
+        line = re.match(r"[^\n]*", raw_content) # Match everything until the end of the line
+        text = line.group(0).rstrip()           # Remove trailing whitespace from the comment text
         if text:
             lexeme_list.append(text)
-        return raw_content[line.end():]
+        return raw_content[line.end():]         # Return the remaining content after the comment line
 
     def consume_block_comment(self, raw_content: str, lexeme_list: list[str]) -> str:
         """
-        After an OBTW: emit each comment line as ONE lexeme (plus its newline) until a
-        line starting with TLDR. The TLDR line is left for the main loop to tokenize.
-        If TLDR never appears, everything is consumed and the syntax analyzer reports it.
+        Handles the block comment starting with OBTW and ending with TLDR.
+        Makes the succeeding text into a single lexeme until the TLDR line.
         """
         # Optional comment text on the OBTW line itself
         line = re.match(r"[^\n]*", raw_content)
@@ -109,17 +108,20 @@ class LexicalAnalyzer:
             lexeme_list.append(text)
         raw_content = raw_content[line.end():]
 
-        while raw_content:
-            lexeme_list.append("\n")                 # the newline ending the previous line
-            raw_content = raw_content[1:]
+        # Consume lines until TLDR is found
+        while raw_content:                              # Keep consuming lines until TLDR is found
+            lexeme_list.append("\n")                    # the newline ending the previous line
+            raw_content = raw_content[1:]               # Remove the newline character from the start of raw_content
             line = re.match(r"[^\n]*", raw_content)
-            if re.match(r"[ \t]*TLDR\b", line.group(0)):
+            if re.match(r"[ \t]*TLDR\b", line.group(0)):# If the line contains TLDR, we stop consuming
                 return self.lexeme_strip(raw_content)
+            # Otherwise, we add the line to the lexeme list and continue
             text = line.group(0).strip()
             if text:
                 lexeme_list.append(text)
             raw_content = raw_content[line.end():]
-        return raw_content
+        # If TLDR not found, raise an error
+        raise SyntaxError("Block comment not closed with TLDR")
 
     def parser(self, lexeme_list: list[str]) -> list[Token]:
         """
