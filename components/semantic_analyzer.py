@@ -300,8 +300,6 @@ class SemanticAnalyzer:
             # Add the function to the function table with its parameters and body
             self.function_table.add(name, Lexeme.FUNCTION_IDENTIFIER, None, None,
                                     parameters=params, return_type=None)
-            self.symbol_table.add(name, Lexeme.FUNCTION_IDENTIFIER, None, None,
-                                    parameters=params, return_type=None)
             self.function_bodies[name] = body
 
     def call_function(self, name: str, args: list):
@@ -343,8 +341,6 @@ class SemanticAnalyzer:
             self.frame = caller                                 # Restore the frame to the caller's frame
 
         info["return_type"] = self.literal_type(result)     # Update the return type of the function in the function table based on the result
-        if self.symbol_table and self.symbol_table.exists(name):
-            self.symbol_table.get(name)["return_type"] = info["return_type"]
         self.set_it(result)                                 # Set the implicit IT variable to the result of the function call
         return result
 
