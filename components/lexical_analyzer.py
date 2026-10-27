@@ -112,16 +112,24 @@ class LexicalAnalyzer:
         while raw_content:                              # Keep consuming lines until TLDR is found
             lexeme_list.append("\n")                    # the newline ending the previous line
             raw_content = raw_content[1:]               # Remove the newline character from the start of raw_content
+            # ====================================================
+            # TODO: Must coalesce the COMMENT_IDENTIFIERS into ONE COMMENT_IDENTIFIER
             line = re.match(r"[^\n]*", raw_content)
-            if re.match(r"[ \t]*TLDR\b", line.group(0)):# If the line contains TLDR, we stop consuming
+            print("LINE     >>> \"", line.group(0),"\"")
+            out = re.match(r".*TLDR\b", line.group(0))
+            print("CHECKING >>> ", out)
+            if out :# If the line contains TLDR, we stop consuming
+                # Split the lines first before returning when there is TLDR
+                print("DEBUG >>>")
                 return self.lexeme_strip(raw_content)
+            # ====================================================
             # Otherwise, we add the line to the lexeme list and continue
             text = line.group(0).strip()
             if text:
                 lexeme_list.append(text)
             raw_content = raw_content[line.end():]
         # If TLDR not found, raise an error
-        raise SyntaxError("Block comment not closed with TLDR")
+        # raise SyntaxError("Block comment not closed with TLDR")
 
     def parser(self, lexeme_list: list[str]) -> list[Token]:
         """
