@@ -51,7 +51,7 @@ class Parser():
     def consume_tokens(
             self,
             expected: Token|None = None,
-            convert:  Token|None = None
+            convert:  Token|None = None,
         ) -> Node:
         """
         Consumes the current token and returns a Node containing it.
@@ -238,6 +238,7 @@ class Parser():
             # full-line BTW comment inside WAZZUP
             node.children.append(self.linebreak())
             node.children.append(self.vars())
+        # <multi_comment> <end_of_line> <vars> | <multi_comment> <vars> 
         elif token and token.type == Lexeme.OBTW:
             node.children.append(self.multi_comment())
             node.children.append(self.end_of_line())
@@ -652,16 +653,17 @@ class Parser():
             node.children.append(self.comment())
         return node
 
-    # <multi_comment> ::= OBTW [<comment>] newline <comment_body> TLDR [<comment>]
+    # <multi_comment> ::= OBTW [<comment>] [newline] <comment_body> TLDR [<comment>]
     def multi_comment(self) -> Node:
         node = Node("multi_comment")    # Create a new node for the multi-line comment
         node.children.append(self.consume_tokens(expected=Lexeme.OBTW))
         # Optional comment after OBTW
         while self.current_token() and self.current_token().type == Lexeme.COMMENT_IDENTIFIER:
             node.children.append(self.comment())
-        node.children.append(self.consume_tokens(expected=Lexeme.NEWLINE))  # newline
+        if self.current_token() and self.current_token().type == Lexeme.NEWLINE:
+            node.children.append(self.consume_tokens(expected=Lexeme.NEWLINE))  # newline
         node.children.append(self.comment_body())
-        node.children.append(self.consume_tokens(expected=Lexeme.TLDR))  # TLDR
+        node.children.append(self.consume_tokens(expected=Lexeme.TLDR))         # TLDR
         # Optional comment after TLDR
         while self.current_token() and self.current_token().type == Lexeme.COMMENT_IDENTIFIER:
             node.children.append(self.comment())
