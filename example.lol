@@ -25,21 +25,32 @@ HAI
   VISIBLE SUM OF QUOSHUNT OF PRODUKT OF 3 AN 4 AN 2 AN 1
 
   OBTW 
-  HELLO JAIDA AUSDHUA TLDR
+  hello
+  a TLDR TLDR
 
+  OBTW 
+  Hello Hi TLDR
+
+  OBTW 
+    Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+      Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+  Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. 
+    Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. 
+    Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+  TLDR
  SMOOSH str1 AN str2
   I IZ func1 YR x AN YR y MKAY
-O RLY?
-   YA RLY                   BTW if
-    VISIBLE "hello"
-   NO WAI                   BTW else
-    O RLY?
-      YA RLY                   BTW if
-        VISIBLE "hello"
-      NO WAI                   BTW else
-        VISIBLE "hi"
-    OIC
-OIC
+  O RLY?
+    YA RLY                   BTW if
+      VISIBLE "hello"
+    NO WAI                   BTW else
+      O RLY?
+        YA RLY                   BTW if
+          VISIBLE "hello"
+        NO WAI                   BTW else
+          VISIBLE "hi"
+      OIC
+  OIC
 
 KTHXBYE
 

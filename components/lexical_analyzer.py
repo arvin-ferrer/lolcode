@@ -26,7 +26,6 @@ LEXEME_PATTERNS = [
 # Compile the regex patterns into a single regex for matching lexemes
 LEXEME_REGEX = re.compile("|".join(f"(?:{p})" for p in LEXEME_PATTERNS))
 
-
 class LexicalAnalyzer:
     """
     Handles the tokenization of the raw input string into a list of tokens.
@@ -39,8 +38,8 @@ class LexicalAnalyzer:
         Run the lexical analyzer pipeline.
         Parse the raw content into lexemes, then get the lexeme types to build the list of tokens.
         """
-        lexeme_list = self.lexer(raw_content)       # Tokenize the input string
-        return self.parser(lexeme_list)             # Parse the lexemes into tokens
+        lexeme_list = self.lexer(raw_content)           # Tokenize the input string
+        return lexeme_list, self.parser(lexeme_list)    # Parse the lexemes into tokens
 
     def lexer(self, raw_content: str) -> list[str]:
         """
@@ -99,37 +98,31 @@ class LexicalAnalyzer:
     def consume_block_comment(self, raw_content: str, lexeme_list: list[str]) -> str:
         """
         Handles the block comment starting with OBTW and ending with TLDR.
-        Makes the succeeding text into a single lexeme until the TLDR line.
+        Makes each comment line a single lexeme until the TLDR line.
         """
-        # Optional comment text on the OBTW line itself
-        line = re.match(r"[^\n]*", raw_content)
-        text = line.group(0).strip()
-        if text:
-            lexeme_list.append(text)
-        raw_content = raw_content[line.end():]
+        first_line_flag = True
+        while True:
+            line = re.match(r"[^\n]*", raw_content)         # Get the current line
+            text = line.group(0)                            # Get the text of the current line
 
-        # Consume lines until TLDR is found
-        while raw_content:                              # Keep consuming lines until TLDR is found
-            lexeme_list.append("\n")                    # the newline ending the previous line
-            raw_content = raw_content[1:]               # Remove the newline character from the start of raw_content
-            # ====================================================
-            # TODO: Must coalesce the COMMENT_IDENTIFIERS into ONE COMMENT_IDENTIFIER
-            line = re.match(r"[^\n]*", raw_content)
-            print("LINE     >>> \"", line.group(0),"\"")
-            out = re.match(r".*TLDR\b", line.group(0))
-            print("CHECKING >>> ", out)
-            if out :# If the line contains TLDR, we stop consuming
-                # Split the lines first before returning when there is TLDR
-                print("DEBUG >>>")
-                return self.lexeme_strip(raw_content)
-            # ====================================================
-            # Otherwise, we add the line to the lexeme list and continue
-            text = line.group(0).strip()
-            if text:
-                lexeme_list.append(text)
-            raw_content = raw_content[line.end():]
-        # If TLDR not found, raise an error
-        # raise SyntaxError("Block comment not closed with TLDR")
+            # Check if the current line contains TLDR
+            # First line doesn't allow TLDR (end of block comment)
+            if not first_line_flag and (out := re.match(r"[ \t]*TLDR\b", text) or re.search(r"\bTLDR[ \t]*$", text)):
+                before = text[:out.start()].strip()         # Text before TLDR, if any
+                if before:
+                    lexeme_list.append(before)
+                lexeme_list.append("TLDR")
+                return self.lexeme_strip(raw_content[line.end():])
+
+            # Append the current line without whitespace
+            if stripped := text.strip():
+                lexeme_list.append(stripped)
+            raw_content = raw_content[line.end():]          # Consume the WHOLE line
+            if not raw_content:                             # End of file reached without TLDR
+                raise SyntaxError("Block comment not closed with TLDR")
+            lexeme_list.append("\n")                        # The newline that ended this line
+            raw_content = raw_content[1:]                   # Consume that newline
+            first_line_flag = False
 
     def parser(self, lexeme_list: list[str]) -> list[Token]:
         """

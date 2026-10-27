@@ -52,7 +52,6 @@ class Parser():
             self,
             expected: Token|None = None,
             convert:  Token|None = None,
-            optional: bool = False
         ) -> Node:
         """
         Consumes the current token and returns a Node containing it.
@@ -61,11 +60,9 @@ class Parser():
         """
         token = self.current_token()    # Get the current token
         if not token:                   # If there is none, raise an error
-            if not optional:
-                raise SyntaxError("Unexpected end of input encountered.")
+            raise SyntaxError("Unexpected end of input encountered.")
         if expected and token.type != expected: # If it is not expected, raise an error
-            if not optional:
-                raise SyntaxError(f"Expected {expected}, got {token.type} ({token.lexeme})")
+            raise SyntaxError(f"Expected {expected}, got {token.type} ({token.lexeme})")
         if convert:                             # If a conversion type is provided, change the token type to it
             token.type = convert
         self.pos += 1                           # Move to the next token
@@ -656,17 +653,17 @@ class Parser():
             node.children.append(self.comment())
         return node
 
-    # <multi_comment> ::= OBTW [<comment>] newline <comment_body> TLDR [<comment>]
+    # <multi_comment> ::= OBTW [<comment>] [newline] <comment_body> TLDR [<comment>]
     def multi_comment(self) -> Node:
         node = Node("multi_comment")    # Create a new node for the multi-line comment
         node.children.append(self.consume_tokens(expected=Lexeme.OBTW))
         # Optional comment after OBTW
         while self.current_token() and self.current_token().type == Lexeme.COMMENT_IDENTIFIER:
             node.children.append(self.comment())
-        # TODO: Optional NEWLINE
-        node.children.append(self.consume_tokens(expected=Lexeme.NEWLINE, optional=True))  # newline
+        if self.current_token() and self.current_token().type == Lexeme.NEWLINE:
+            node.children.append(self.consume_tokens(expected=Lexeme.NEWLINE))  # newline
         node.children.append(self.comment_body())
-        node.children.append(self.consume_tokens(expected=Lexeme.TLDR))  # TLDR
+        node.children.append(self.consume_tokens(expected=Lexeme.TLDR))         # TLDR
         # Optional comment after TLDR
         while self.current_token() and self.current_token().type == Lexeme.COMMENT_IDENTIFIER:
             node.children.append(self.comment())

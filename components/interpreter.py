@@ -12,6 +12,7 @@ class LOLCODEInterpreter:
         self.output_fn = output_fn
         self.input_fn = input_fn if input_fn else input
         self.tokens: list[Token] = []
+        self.lexemes: list[str] = []
         self.parse_tree: Node = None
         self.symbol_table: SymbolTable = None
         
@@ -24,13 +25,16 @@ class LOLCODEInterpreter:
 
         raw_content = self.read_file(file_path)         # Read the raw text
         lexer = LexicalAnalyzer()                       # Create the lexer object then run
-        self.tokens = lexer.run(raw_content)
+        self.lexemes, self.tokens = lexer.run(raw_content)
         if self.debug:
+            print(self.lexemes)
             pp.pprint(self.tokens)
 
         parser = Parser(self.tokens)                    # Create the parser object then run
         self.parse_tree = parser.parse()
         if self.debug:
             self.parse_tree.display()
-        # semantic_analyzer = SemanticAnalyzer(output_fn=self.output_fn, input_fn=self.input_fn)          # Create the semantic analyzer then run
-        # self.symbol_table = semantic_analyzer.run(self.parse_tree)
+        semantic_analyzer = SemanticAnalyzer(output_fn=self.output_fn, input_fn=self.input_fn)          # Create the semantic analyzer then run
+        self.symbol_table = semantic_analyzer.run(self.parse_tree)
+        if self.debug:
+            pp.pprint(self.symbol_table.table)
