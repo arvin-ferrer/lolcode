@@ -1,9 +1,0 @@
-from model.lexeme import Lexeme
-class Token():
-    def __init__(self, lexeme: str, type: Lexeme):
-        self.lexeme = lexeme        # Type of the token
-        self.type = type            # Value of the token
-    def __str__(self):
-        return "Token(lexeme=" + self.lexeme.replace('\n', '\\n').replace('\t', '\\t').replace('\r', '\\r') + ", type=" + str(self.type) + ")"
-    def __repr__(self):
-        return self.__str__()
