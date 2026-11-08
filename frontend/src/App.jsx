@@ -4,12 +4,10 @@ import LexemeTable from './components/LexemeTable.jsx'
 import SymbolTable from './components/SymbolTable.jsx'
 import Console from './components/Console.jsx'
 
-// Layout of spec §D parts 1–6. Running: see PLAN.md
 export default function App() {
   const [fileName, setFileName] = useState('untitled')
   const [code, setCode] = useState('')
 
-  // §D 1: load the selected file into the editor
   function handleOpen(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -19,7 +17,7 @@ export default function App() {
       setCode(reader.result)
     }
     reader.readAsText(file)
-    e.target.value = '' // so re-opening the same file fires onChange again
+    e.target.value = '' 
   }
 
   return (
