@@ -27,7 +27,6 @@ export default function App() {
       input_request: () => setWaitingInput(true),
       symbols: (msg) => setSymbols(msg.symbols),
       done: (msg) => {
-        // a lost connection has no lexemes/symbols: keep what already arrived
         if (msg.lexemes) setLexemes(msg.lexemes)
         if (msg.symbols) setSymbols(msg.symbols)
         setError(msg.error)
