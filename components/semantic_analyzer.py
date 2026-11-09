@@ -12,12 +12,13 @@ class SemanticAnalyzer:
     """
     Executes a parse tree using recursive descent tree-walking.
     """
-    def __init__(self, output_fn=None, input_fn=None, strict_noob_to_yarn: bool = False):
+    def __init__(self, output_fn=None, input_fn=None, on_update=None, strict_noob_to_yarn: bool = False):
         if output_fn is None or output_fn is print:
             self.output_fn = lambda text: print(text, end="")
         else:
             self.output_fn = output_fn
         self.input_fn = input_fn if input_fn else input
+        self.on_update = on_update
 
         self.symbol_table: SymbolTable = None
         self.function_table: SymbolTable = None
@@ -152,6 +153,9 @@ class SemanticAnalyzer:
         Set the value of a variable in the current frame's symbol table.
         """
         self.frame.table.add(name, Lexeme.VARIABLE_IDENTIFIER, value, self.literal_type(value))
+        if self.on_update and self.frame.table is self.symbol_table:
+            # Trigger callback for symbol table updates in global frame
+            self.on_update(self.symbol_table)
 
     def get_var(self, name: str):
         """
