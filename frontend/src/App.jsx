@@ -28,7 +28,7 @@ export default function App() {
         <label className="btn">
           Open File
           <input type="file" accept=".lol,.txt" hidden onChange={handleOpen} />
-        </label>
+        </label>  
         <button>Execute</button>
       </header>
 

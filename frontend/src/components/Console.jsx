@@ -1,4 +1,3 @@
-// §D 6. Program output, errors, GIMMEH input field: see PLAN.md
 export default function Console() {
   return (
     <section className="panel console">
