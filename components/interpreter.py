@@ -16,17 +16,17 @@ class LOLCODEInterpreter:
         self.lexemes: list[str] = []
         self.parse_tree: Node = None
         self.symbol_table: SymbolTable = None
+        self.semantic_analyzer: SemanticAnalyzer = None
         
     def read_file(self, file_path):
-        with open(file_path, "r") as file:
+        with open(file_path, "r", encoding="utf-8") as file:
             return file.read()
 
-    def run(self, file_path):
+    def run_source(self, text):
         pp = pprint.PrettyPrinter(indent=4)
 
-        raw_content = self.read_file(file_path)         # Read the raw text
         lexer = LexicalAnalyzer()                       # Create the lexer object then run
-        self.lexemes, self.tokens = lexer.run(raw_content)
+        self.lexemes, self.tokens = lexer.run(text)
         if self.debug:
             print(self.lexemes)
             pp.pprint(self.tokens)
@@ -35,7 +35,15 @@ class LOLCODEInterpreter:
         self.parse_tree = parser.parse()
         if self.debug:
             self.parse_tree.display()
-        semantic_analyzer = SemanticAnalyzer(output_fn=self.output_fn, input_fn=self.input_fn, on_update=self.on_update)          # Create the semantic analyzer then run
-        self.symbol_table = semantic_analyzer.run(self.parse_tree)
+        self.semantic_analyzer = SemanticAnalyzer(output_fn=self.output_fn, input_fn=self.input_fn, on_update=self.on_update)          # Create the semantic analyzer then run
+        try:
+            self.symbol_table = self.semantic_analyzer.run(self.parse_tree)
+        finally:
+            if self.semantic_analyzer and self.semantic_analyzer.symbol_table:
+                self.symbol_table = self.semantic_analyzer.symbol_table
         if self.debug:
             pp.pprint(self.symbol_table.table)
+        return self.symbol_table
+
+    def run(self, file_path):
+        return self.run_source(self.read_file(file_path))
