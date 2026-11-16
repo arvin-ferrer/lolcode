@@ -41,6 +41,7 @@ export default function App() {
   // Send interactive user input to waiting GIMMEH prompt
   function sendInput(value) {
     session.current.sendInput(value)
+    setOutput((prev) => prev + value + '\n')
     setWaitingInput(false)
   }
 

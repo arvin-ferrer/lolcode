@@ -87,3 +87,4 @@ td { padding: 3px 8px; border-top: 1px solid #ddd; }
 .console-body { flex: 1; overflow: auto; padding: 8px; }
 .console-body pre { margin: 0; font-family: monospace; white-space: pre-wrap; }
 .console-body pre.error { color: #b00020; }
+.console-input { border: 0; border-top: 1px solid #ccc; padding: 6px 8px; font-family: monospace; }
