@@ -5,6 +5,7 @@ import LexemeTable from './components/LexemeTable.jsx'
 import SymbolTable from './components/SymbolTable.jsx'
 import Console from './components/Console.jsx'
 
+// Main application component managing editor, tables, and execution state
 export default function App() {
   const [fileName, setFileName] = useState('untitled')
   const [code, setCode] = useState('')
@@ -16,6 +17,7 @@ export default function App() {
   const [waitingInput, setWaitingInput] = useState(false)
   const session = useRef(null)
 
+  // Start code execution session and register message handlers
   function handleExecute() {
     setLexemes([])
     setSymbols([])
@@ -36,11 +38,13 @@ export default function App() {
     })
   }
 
+  // Send interactive user input to waiting GIMMEH prompt
   function sendInput(value) {
     session.current.sendInput(value)
     setWaitingInput(false)
   }
 
+  // Load selected source file content into the editor
   function handleOpen(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -50,7 +54,7 @@ export default function App() {
       setCode(reader.result)
     }
     reader.readAsText(file)
-    e.target.value = '' 
+    e.target.value = ''
   }
 
   return (
