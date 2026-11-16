@@ -20,7 +20,7 @@ Linux/macOS: same, with `python3 -m venv .venv` and `source .venv/bin/activate`.
 
 ## Run
 
-GUI (not yet implemented, see `PLAN.md`): `python server.py`, then open http://localhost:8000.
+GUI: `python server.py`, then open http://localhost:8000.
 
 CLI: `python main.py` runs `example.lol`.
 
