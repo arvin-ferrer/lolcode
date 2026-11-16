@@ -1,5 +1,4 @@
-// §D 4. Rows of { identifier, value }, updated live: see PLAN.md
-export default function SymbolTable() {
+export default function SymbolTable({ symbols = [] }) {
   return (
     <section className="panel table-panel">
       <div className="panel-title">
@@ -13,7 +12,14 @@ export default function SymbolTable() {
               <th>Value</th>
             </tr>
           </thead>
-          <tbody />
+          <tbody>
+            {symbols.map(([name, value]) => (
+              <tr key={name}>
+                <td className="mono">{name}</td>
+                <td className="mono">{value}</td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
     </section>
