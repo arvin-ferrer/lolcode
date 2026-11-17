@@ -46,6 +46,7 @@ class SemanticAnalyzer:
             # Register functions from the program's function definitions
             self.register_functions(children[0])
             self.register_functions(children[6])
+            self.register_functions(children[4])
 
             for decl in self.collect(children[3], "declaration"):
                 # Guard with try-except to catch recursion errors and provide context
