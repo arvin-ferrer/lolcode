@@ -117,8 +117,11 @@ class Parser():
 
         if token and token.type == Lexeme.I_HAS_A and not self.in_function:     # If I HAS A is found outside a function, raise an error
             raise SyntaxError(f"Variables must be declared inside the WAZZUP ... BUHBYE section ({token.lexeme})")
-        if token and token.type == Lexeme.HOW_IZ_I:                             # If HOW IZ I is found inside the program body, raise an error
-            raise SyntaxError("Functions must be defined before HAI or after KTHXBYE, not inside the program body")
+        if token and token.type == Lexeme.HOW_IZ_I and not self.in_function:
+            node.children.append(self.func_def())
+            node.children.append(self.end_of_line())
+            node.children.append(self.statement_list())
+            return node
 
         starters = self.STATEMENT_STARTERS
         if self.in_function:        # if inside a function body, allow variable declarations
