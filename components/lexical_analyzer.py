@@ -31,14 +31,23 @@ class LexicalAnalyzer:
     Handles the tokenization of the raw input string into a list of tokens.
     """
     def __init__(self):
-        pass
+        self.lexemes: list[str] = []    # lexemes found so far (kept even if lexing fails)
+        self.tokens: list[Token] = []   # tokens classified so far (kept even if lexing fails)
 
     def run(self, raw_content: str) -> list[Token]:
         """
         Run the lexical analyzer pipeline.
         Parse the raw content into lexemes, then get the lexeme types to build the list of tokens.
         """
-        lexeme_list = self.lexer(raw_content)           # Tokenize the input string
+        try:
+            lexeme_list = self.lexer(raw_content)       # Tokenize the input string
+        except SyntaxError:
+            # Classify whatever was read before the error so it can still be shown
+            try:
+                self.parser(self.lexemes)
+            except SyntaxError:
+                pass
+            raise
         return lexeme_list, self.parser(lexeme_list)    # Parse the lexemes into tokens
 
     def lexer(self, raw_content: str) -> list[str]:
@@ -50,6 +59,7 @@ class LexicalAnalyzer:
         raw_content = self.lexeme_strip(raw_content)
 
         lexeme_list = []            # List to hold the lexemes
+        self.lexemes = lexeme_list  # Same list, so a partial result survives an error
         multiline_flag = False      # Flag to indicate if we are in a multiline 
         while raw_content not in ["", None]:
             if out := LEXEME_REGEX.match(raw_content):
@@ -130,6 +140,7 @@ class LexicalAnalyzer:
         comment_flag = False            # inside a BTW line comment
         block_comment_flag = False      # inside an OBTW ... TLDR block
         token_list = []
+        self.tokens = token_list        # Same list, so a partial result survives an error
         for raw_str in lexeme_list:
             if re.search("^\n", raw_str):
                 comment_flag = False

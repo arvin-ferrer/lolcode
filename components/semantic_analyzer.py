@@ -548,6 +548,11 @@ class SemanticAnalyzer:
             raise RuntimeError(f"Semantic error: Loop label '{label}' is already used by an enclosing loop")
         if not frame.table.exists(var): # Var must be declared
             raise RuntimeError(f"Semantic error: Loop variable '{var}' is not declared")
+        # Check up front so a bad variable is rejected before the body ever runs.
+        try:
+            self.to_number(self.get_var(var))
+        except RuntimeError:
+            raise RuntimeError(f"Semantic error: Loop variable '{var}' cannot be cast to a number for UPPIN/NERFIN")
 
         # Add loop label to the frame
         frame.loop_labels.append(label)

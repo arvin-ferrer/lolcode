@@ -5,7 +5,7 @@ from flask import Flask
 from flask_sock import Sock
 from simple_websocket import ConnectionClosed
 
-from components.interpreter import LOLCODEInterpreter
+from components.interpreter import LOLCODEInterpreter, format_error
 from components.semantic_analyzer import SemanticAnalyzer
 from model.lexeme import Lexeme
 
@@ -87,7 +87,7 @@ def ws_handler(ws):
     except Exception as exc:
         if disconnected:
             return
-        error = str(exc)
+        error = format_error(exc)
 
     # Send the final execution result and wait for the client to close the socket
     try:
