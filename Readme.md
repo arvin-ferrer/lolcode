@@ -30,3 +30,18 @@ CLI: `python main.py <filename>.lol` runs `<filename>.lol`.
 python server.py            # backend on :8000
 cd frontend && npm run dev  # frontend on :5173, proxies /api and /ws to :8000
 ```
+
+## Bonus Features implemented
+
+| Bonus feature | Status |
+|---|---|
+| Soft-line/command breaks (`,`) | Implemented |
+| Line continuation (`...`) | Implemented |
+| `MEBBE` / else-if clauses | Implemented |
+| Loop nesting | Implemented |
+| If-else nesting | Implemented |
+| Switch nesting | Implemented |
+| Nesting of different flow-control statements | Implemented |
+| Special characters in a YARN (`:)`, `:>`, etc.) | Not covered |
+| Suppress the newline with `!` after `VISIBLE` | Not covered |
+| Arrays | Not covered |
