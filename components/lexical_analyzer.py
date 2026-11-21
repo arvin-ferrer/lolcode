@@ -105,14 +105,12 @@ class LexicalAnalyzer:
             line = re.match(r"[^\n]*", raw_content)         # Get the current line
             text = line.group(0)                            # Get the text of the current line
 
-            # Check if the current line contains TLDR
+            # TLDR only ends the block when it starts its own line,
+            # so a comment line that merely ends with the word TLDR is still comment text.
             # First line doesn't allow TLDR (end of block comment)
-            if not first_line_flag and (out := re.match(r"[ \t]*TLDR\b", text) or re.search(r"\bTLDR[ \t]*$", text)):
-                before = text[:out.start()].strip()         # Text before TLDR, if any
-                if before:
-                    lexeme_list.append(before)
+            if not first_line_flag and (out := re.match(r"[ \t]*TLDR\b", text)):
                 lexeme_list.append("TLDR")
-                return self.lexeme_strip(raw_content[line.end():])
+                return self.lexeme_strip(raw_content[out.end():])
 
             # Append the current line without whitespace
             if stripped := text.strip():

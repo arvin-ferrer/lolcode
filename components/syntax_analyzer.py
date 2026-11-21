@@ -213,10 +213,22 @@ class Parser():
             raise SyntaxError(f"Expected a type token, got {self.current_token()}")
         return node
 
-    # <variables_dec> ::= WAZZUP <end_of_line> <vars> BUHBYE <end_of_line> | ε
+    def wazzup_ahead(self) -> bool:
+        """
+        Returns True if WAZZUP is the next token once comments and blank lines are skipped.
+        """
+        i = self.pos
+        skippable = (Lexeme.NEWLINE, Lexeme.BTW, Lexeme.OBTW, Lexeme.TLDR, Lexeme.COMMENT_IDENTIFIER)
+        while i < len(self.tokens) and self.tokens[i].type in skippable:
+            i += 1
+        return i < len(self.tokens) and self.tokens[i].type == Lexeme.WAZZUP
+
+    # <variables_dec> ::= <comments> WAZZUP <end_of_line> <vars> BUHBYE <end_of_line> | ε
     def variables_dec(self) -> Node:
         node = Node("variables_dec")
-        if self.current_token() and self.current_token().type == Lexeme.WAZZUP:
+        # Comments are not statements, so they may sit between HAI and WAZZUP
+        if self.wazzup_ahead():
+            node.children.append(self.comments())
             node.children.append(self.consume_tokens(expected=Lexeme.WAZZUP))  # WAZZUP
             node.children.append(self.end_of_line())
             node.children.append(self.vars())
@@ -633,13 +645,13 @@ class Parser():
             pass # Epsilon
         return node
 
-    # <comments> ::= <linebreak> <comments> | <multi_comment> <linebreak> <comments> | ε
+    # <comments> ::= <linebreak> <comments> | <multi_comment> <end_of_line> <comments> | ε
     def comments(self) -> Node:
         node = Node("comments")         # Create a new node for the comments
-        # <multi_comment> <linebreak> <comments>
+        # <multi_comment> <end_of_line> <comments>
         if self.current_token() and self.current_token().type == Lexeme.OBTW:
             node.children.append(self.multi_comment())
-            node.children.append(self.linebreak())
+            node.children.append(self.end_of_line())    # nothing but a BTW comment may follow TLDR
             node.children.append(self.comments())
         # <linebreak> <comments> 
         elif self.current_token() and self.current_token().type in [Lexeme.BTW, Lexeme.NEWLINE]:

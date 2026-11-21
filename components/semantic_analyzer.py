@@ -12,7 +12,7 @@ class SemanticAnalyzer:
     """
     Executes a parse tree using recursive descent tree-walking.
     """
-    def __init__(self, output_fn=None, input_fn=None, on_update=None, strict_noob_to_yarn: bool = False):
+    def __init__(self, output_fn=None, input_fn=None, on_update=None, strict_noob_to_yarn: bool = True):
         if output_fn is None or output_fn is print:
             self.output_fn = lambda text: print(text, end="")
         else:
@@ -25,7 +25,8 @@ class SemanticAnalyzer:
         self.function_bodies: dict[str, Node] = {}
         self.frame: Frame = None
 
-        # Parameter to control strict NOOB to YARN casting
+        # Spec: implicitly casting a NOOB to anything but TROOF is an error, so VISIBLE/SMOOSH
+        # of an uninitialized variable fails by default. Pass False to print "" instead.
         self.STRICT_NOOB_TO_YARN = strict_noob_to_yarn
 
     def run(self, parse_tree: Node) -> SymbolTable:
@@ -686,6 +687,8 @@ class SemanticAnalyzer:
         """
         children = node.children                        # Get the children of the typecast expression node
         target = children[-1].children[0].value.lexeme  # Get the target type for the typecast from the last child node
+        # MAEK only produces a value. A bare "MAEK x A type" statement stores it in IT through
+        # exec_expression; setting IT here would also clobber it when the result is assigned or printed.
         return self.cast(self.eval_expression(children[1]), target)
 
     def eval_func_call(self, node: Node):

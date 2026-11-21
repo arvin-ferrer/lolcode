@@ -22,7 +22,7 @@ Linux/macOS: same, with `python3 -m venv .venv` and `source .venv/bin/activate`.
 
 GUI: `python server.py`, then open http://localhost:8000.
 
-CLI: `python main.py` runs `example.lol`.
+CLI: `python main.py <filename>.lol` runs `<filename>.lol`.
 
 ## Develop
 
