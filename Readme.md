@@ -45,3 +45,18 @@ cd frontend && npm run dev  # frontend on :5173, proxies /api and /ws to :8000
 | Special characters in a YARN (`:)`, `:>`, etc.) | Implemented |
 | Suppress the newline with `!` after `VISIBLE` | Implemented |
 | Arrays | Not covered |
+
+## Special Characters in a YARN
+
+Escape sequences supported inside `YARN` string literals:
+
+| Escape Sequence | Equivalent | Description | Example | Output |
+|---|---|---|---|---|
+| `:)` | `\n` | Newline | `"Hi:)There"` | `Hi` *(new line)* `There` |
+| `:>` | `\t` | Tab | `"A:>B"` | `A` *(tab)* `B` |
+| `:o` or `:O` | `\a` | Bell (alert) | `"Done:o"` | `Done` *(bell)* |
+| `:"` | `"` | Literal double quote | `"Say :"Hi:""` | `Say "Hi"` |
+| `::` | `:` | Literal colon | `"Ratio:: 1::2"` | `Ratio: 1:2` |
+| `:(<hex>)` | Unicode char | Character from hexadecimal code point | `":(41) :(263A)"` | `A ☺` |
+
+Unrecognized escape sequences and out-of-range hex code points are left as-is.
