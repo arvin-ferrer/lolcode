@@ -79,4 +79,5 @@ class Lexeme(Enum):
     # Special
     LINE_CONT = "..."
     NEWLINE = "NEWLINE"
+    EXCLAMATION = "EXCLAMATION"
 

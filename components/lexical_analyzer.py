@@ -17,7 +17,7 @@ LEXEME_PATTERNS = [
     r"WTF\?", r"OMGWTF\b", r"OMG\b",
     r"IM IN YR\b", r"UPPIN\b", r"NERFIN\b", r"YR\b", r"TIL\b", r"WILE\b", r"IM OUTTA YR\b",
     r"HOW IZ I\b", r"IF U SAY SO\b", r"GTFO\b", r"FOUND YR\b", r"I IZ\b", r"MKAY\b",
-    r"\+",
+    r"\+", r"!",
     r"[a-zA-Z][a-zA-Z0-9_]*",       # identifiers / WIN / FAIL / type names (spec: must start with a letter)
     r"-?\d+\.\d+",                  # NUMBAR
     r"-?\d+",                       # NUMBR
@@ -259,6 +259,8 @@ class LexicalAnalyzer:
                     token_list.append(Token(raw_str, Lexeme.MKAY))
                 elif re.search(r"^\+$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.PLUS))
+                elif re.search(r"^!$", raw_str):
+                    token_list.append(Token(raw_str, Lexeme.EXCLAMATION))
                 # Identifiers
                 # TROOF literals
                 elif re.search("^(WIN|FAIL)$", raw_str):

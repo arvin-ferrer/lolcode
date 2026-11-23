@@ -456,8 +456,10 @@ class SemanticAnalyzer:
             parts.append(self.to_yarn(self.eval_expression(pl.children[0])))
             # Iterate if there is more to the expr_list
             pl = pl.children[2] if len(pl.children) > 2 else None
+        # ! suppresses the newline
+        suppress_newline = len(node.children) > 2
         # Print the concatenated string to the output function
-        self.output_fn("".join(parts) + "\n")
+        self.output_fn("".join(parts) + ("" if suppress_newline else "\n"))
 
     def exec_typecast_stmt(self, node: Node):
         """

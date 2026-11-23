@@ -184,6 +184,8 @@ class Parser():
         node = Node("print")
         node.children.append(self.consume_tokens(expected=Lexeme.VISIBLE))  # VISIBLE
         node.children.append(self.print_list())
+        if self.current_token() and self.current_token().type == Lexeme.EXCLAMATION: # ! now suppresses VISIBLE's automatic newline
+            node.children.append(self.consume_tokens(expected=Lexeme.EXCLAMATION))
         return node
 
     # <print_list> ::= <expression> | <expression> + <print_list>

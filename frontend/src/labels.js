@@ -67,6 +67,7 @@ export const LABELS = {
   NOOB_LITERAL: 'NOOB Literal',
   LINE_CONT: 'Line Continuation',
   NEWLINE: 'Newline',
+  EXCLAMATION: 'Newline Suppressor'
 }
 
 // Return the readable classification for a Lexeme enum name, falling back to the enum name
