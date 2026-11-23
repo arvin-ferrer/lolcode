@@ -21,7 +21,7 @@ LEXEME_PATTERNS = [
     r"[a-zA-Z][a-zA-Z0-9_]*",       # identifiers / WIN / FAIL / type names (spec: must start with a letter)
     r"-?\d+\.\d+",                  # NUMBAR
     r"-?\d+",                       # NUMBR
-    r'"[^"\n]*"',                   # YARN (no newline inside)
+    r'"(?:[^":\n]|:.)*"',           # YARN (supports escape sequences like :) :> :" ::)
 ]
 # Compile the regex patterns into a single regex for matching lexemes
 LEXEME_REGEX = re.compile("|".join(f"(?:{p})" for p in LEXEME_PATTERNS))
@@ -273,7 +273,7 @@ class LexicalAnalyzer:
                 elif re.search("^-?\\d+\\.\\d+$", raw_str):
                     token_list.append(Token(raw_str, Lexeme.NUMBAR_LITERAL))
                 # YARN literals
-                elif re.search("^\"[^\"]*\"$", raw_str):
+                elif re.search(r'^"(?:[^":\n]|:.)*"$', raw_str):
                     token_list.append(Token(raw_str, Lexeme.YARN_LITERAL))
                 # Variable identifiers (must start with a letter)
                 elif re.search("^[a-zA-Z][a-zA-Z0-9_]*$", raw_str):

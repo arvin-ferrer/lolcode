@@ -8,6 +8,9 @@ from model.node import Node
 from model.symbol_table import SymbolTable
 from model.frame import Frame
 
+# Regex pattern for LOLCODE YARN escape sequences
+YARN_ESCAPE_REGEX = re.compile(r':(?:\)|>|[oO]|"|:|\(([0-9a-fA-F]+)\))')
+
 class SemanticAnalyzer:
     """
     Executes a parse tree using recursive descent tree-walking.
@@ -176,7 +179,23 @@ class SemanticAnalyzer:
         self.set_var("IT", value)
 
     @staticmethod
-    def literal_value(token: Token):
+    def unescape_yarn(s: str) -> str:
+        # Replace LOLCODE escape sequences with their character equivalents
+        def replace(m):
+            seq = m.group(0)
+            if seq == ":)": return "\n"
+            if seq == ":>": return "\t"
+            if seq in (":o", ":O"): return "\a"
+            if seq == ':"': return '"'
+            if seq == "::": return ":"
+            if m.group(1):
+                try: return chr(int(m.group(1), 16))
+                except (ValueError, OverflowError): return seq
+            return seq
+        return YARN_ESCAPE_REGEX.sub(replace, s)
+
+    @classmethod
+    def literal_value(cls, token: Token):
         """
         Get the literal value of a token based on its type.
         """
@@ -186,7 +205,7 @@ class SemanticAnalyzer:
         if token.type == Lexeme.NUMBAR_LITERAL: 
             return float(s)
         if token.type == Lexeme.YARN_LITERAL: 
-            return s[1:-1]
+            return cls.unescape_yarn(s[1:-1])
         return s == "WIN"
 
     @staticmethod

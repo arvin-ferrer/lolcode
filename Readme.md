@@ -42,6 +42,6 @@ cd frontend && npm run dev  # frontend on :5173, proxies /api and /ws to :8000
 | If-else nesting | Implemented |
 | Switch nesting | Implemented |
 | Nesting of different flow-control statements | Implemented |
-| Special characters in a YARN (`:)`, `:>`, etc.) | Not covered |
+| Special characters in a YARN (`:)`, `:>`, etc.) | Implemented |
 | Suppress the newline with `!` after `VISIBLE` | Not covered |
 | Arrays | Not covered |
